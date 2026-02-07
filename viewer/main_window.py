@@ -2,9 +2,12 @@ import sys
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QSplitter, QFileDialog, QLabel,
+    QMessageBox,
 )
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtCore import Qt, QSettings, Slot
+
+from viewer.exif_reader import write_description
 
 from viewer.constants import (
     DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, DEFAULT_METADATA_PANEL_WIDTH,
@@ -109,6 +112,7 @@ class MainWindow(QMainWindow):
         self._loader.loading_started.connect(lambda: self.statusBar().showMessage("Loading..."))
         self._image_view.zoom_changed.connect(self._on_zoom_changed)
         self._gif_player.frame_ready.connect(self._image_view.update_pixmap_frame)
+        self._metadata_panel.description_edit_requested.connect(self._on_description_edit)
 
     def _restore_settings(self):
         geom = self._settings.value("window/geometry")
@@ -255,3 +259,15 @@ class MainWindow(QMainWindow):
     def _toggle_metadata(self):
         visible = self._metadata_panel.isVisible()
         self._metadata_panel.setVisible(not visible)
+
+    @Slot(str)
+    def _on_description_edit(self, new_text: str):
+        entry = self._store.get_entry(self._current_index)
+        if entry is None:
+            return
+        try:
+            write_description(entry.file_path, new_text)
+            self._metadata_panel.update_metadata(entry.file_path)
+            self.statusBar().showMessage("Description saved")
+        except Exception as e:
+            QMessageBox.warning(self, "Error Saving Description", str(e))

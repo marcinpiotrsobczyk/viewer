@@ -1,6 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
-from PIL import Image
+from PIL import Image, PngImagePlugin
 from PIL.ExifTags import TAGS, GPSTAGS
 
 
@@ -183,8 +183,20 @@ def read_metadata(file_path: str) -> dict:
     except Exception:
         pass
 
-    # Description priority: ImageDescription → XMP → UserComment → XPComment
-    for candidate in [image_description, xmp_description, user_comment, xp_comment]:
+    # PNG text chunks
+    png_description: str | None = None
+    try:
+        if pil_img.format == "PNG" and hasattr(pil_img, "info"):
+            for key, value in pil_img.info.items():
+                if isinstance(value, str):
+                    all_tags[key] = value
+                    if key.lower() == "description" and value.strip():
+                        png_description = value.strip()
+    except Exception:
+        pass
+
+    # Description priority: ImageDescription → XMP → PNG text → UserComment → XPComment
+    for candidate in [image_description, xmp_description, png_description, user_comment, xp_comment]:
         if candidate:
             description = candidate
             break
@@ -192,3 +204,56 @@ def read_metadata(file_path: str) -> dict:
     result["description"] = description
     result["all_tags"] = all_tags
     return result
+
+
+_WRITABLE_EXTENSIONS = {".jpg", ".jpeg", ".tiff", ".tif", ".webp", ".png"}
+
+
+def can_write_description(file_path: str) -> bool:
+    """Check if description metadata can be written to this file."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext not in _WRITABLE_EXTENSIONS:
+        return False
+    return os.access(file_path, os.W_OK)
+
+
+def write_description(file_path: str, description: str) -> None:
+    """Write a description to the image file's metadata.
+
+    Supports JPEG, TIFF, WebP (via EXIF tag 270) and PNG (via text chunk).
+    Raises ValueError for unsupported formats.
+    Raises OSError on write failures.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+
+    if ext in {".jpg", ".jpeg"}:
+        img = Image.open(file_path)
+        exif = img.getexif()
+        exif[270] = description
+        img.save(file_path, exif=exif.tobytes(), quality="keep", subsampling=0)
+
+    elif ext in {".tiff", ".tif"}:
+        img = Image.open(file_path)
+        exif = img.getexif()
+        exif[270] = description
+        img.save(file_path, exif=exif.tobytes(), compression="tiff_deflate")
+
+    elif ext == ".webp":
+        img = Image.open(file_path)
+        exif = img.getexif()
+        exif[270] = description
+        img.save(file_path, exif=exif.tobytes(), quality=90)
+
+    elif ext == ".png":
+        img = Image.open(file_path)
+        # Preserve existing text chunks
+        pnginfo = PngImagePlugin.PngInfo()
+        existing = img.info or {}
+        for key, value in existing.items():
+            if isinstance(value, str):
+                pnginfo.add_text(key, value)
+        pnginfo.add_text("Description", description)
+        img.save(file_path, pnginfo=pnginfo)
+
+    else:
+        raise ValueError(f"Writing description is not supported for {ext} files")

@@ -5,7 +5,10 @@ import tempfile
 import pytest
 from PIL import Image
 
-from viewer.exif_reader import read_metadata, _decode_user_comment, _extract_xmp_description
+from viewer.exif_reader import (
+    read_metadata, _decode_user_comment, _extract_xmp_description,
+    write_description, can_write_description,
+)
 
 
 class TestDecodeUserComment:
@@ -121,3 +124,55 @@ class TestReadMetadata:
 
         meta = read_metadata(img_path)
         assert meta["description"] == "A test description"
+
+
+class TestWriteDescription:
+    def test_write_description_jpeg(self, tmp_path):
+        img_path = str(tmp_path / "test.jpg")
+        img = Image.new("RGB", (100, 100), color="red")
+        img.save(img_path, "JPEG")
+
+        write_description(img_path, "Hello JPEG")
+        meta = read_metadata(img_path)
+        assert meta["description"] == "Hello JPEG"
+
+    def test_write_description_png(self, tmp_path):
+        img_path = str(tmp_path / "test.png")
+        img = Image.new("RGB", (100, 100), color="blue")
+        img.save(img_path, "PNG")
+
+        write_description(img_path, "Hello PNG")
+        meta = read_metadata(img_path)
+        assert meta["all_tags"].get("Description") == "Hello PNG"
+
+    def test_write_description_unsupported(self, tmp_path):
+        img_path = str(tmp_path / "test.gif")
+        img = Image.new("RGB", (10, 10), color="green")
+        img.save(img_path, "GIF")
+
+        with pytest.raises(ValueError):
+            write_description(img_path, "should fail")
+
+
+class TestCanWriteDescription:
+    def test_can_write_description_readonly(self, tmp_path):
+        img_path = str(tmp_path / "readonly.jpg")
+        img = Image.new("RGB", (10, 10), color="red")
+        img.save(img_path, "JPEG")
+        os.chmod(img_path, 0o444)
+
+        assert can_write_description(img_path) is False
+
+    def test_can_write_description_unsupported_format(self, tmp_path):
+        img_path = str(tmp_path / "test.gif")
+        img = Image.new("RGB", (10, 10), color="green")
+        img.save(img_path, "GIF")
+
+        assert can_write_description(img_path) is False
+
+    def test_can_write_description_writable_jpeg(self, tmp_path):
+        img_path = str(tmp_path / "test.jpg")
+        img = Image.new("RGB", (10, 10), color="red")
+        img.save(img_path, "JPEG")
+
+        assert can_write_description(img_path) is True
