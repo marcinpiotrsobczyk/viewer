@@ -62,6 +62,25 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 /* Zoom indicator */
 #zoom-indicator { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #ccc; padding: 3px 8px; border-radius: 3px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
 #zoom-indicator.visible { opacity: 1; }
+
+/* Edit button */
+#desc-header { display: flex; align-items: center; justify-content: space-between; }
+#desc-header h3 { margin: 0; }
+#edit-desc-btn { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 2px 10px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+#edit-desc-btn:hover { background: #4a4a4a; }
+#edit-desc-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Modal overlay */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: #2d2d2d; border: 1px solid #555; border-radius: 6px; padding: 16px; width: 440px; max-width: 90vw; }
+.modal h3 { margin-bottom: 10px; color: #e0e0e0; }
+.modal textarea { width: 100%; height: 120px; background: #1e1e1e; color: #d0d0d0; border: 1px solid #555; border-radius: 3px; padding: 8px; font-family: inherit; font-size: 13px; resize: vertical; }
+.modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.modal-buttons button { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 5px 16px; border-radius: 3px; cursor: pointer; font-size: 13px; }
+.modal-buttons button:hover { background: #4a4a4a; }
+.modal-buttons button.primary { background: #2a6db5; border-color: #2a82da; }
+.modal-buttons button.primary:hover { background: #3580cc; }
 </style>
 </head>
 <body>
@@ -83,7 +102,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
     </div>
     <div id="splitter"></div>
     <div id="metadata-panel">
-      <h3>Description</h3>
+      <div id="desc-header"><h3>Description</h3><button id="edit-desc-btn" disabled>Edit</button></div>
       <div id="desc-text" class="empty">(No description)</div>
       <hr class="meta-separator">
       <div id="file-info"></div>
@@ -103,6 +122,17 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
     F Fit &nbsp;|&nbsp; M Metadata &nbsp;|&nbsp; Ctrl+O Open
   </div>
   <div id="status-bar">Ready — Ctrl+O to open a folder</div>
+</div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>Edit Description</h3>
+    <textarea id="edit-textarea"></textarea>
+    <div class="modal-buttons">
+      <button id="edit-cancel">Cancel</button>
+      <button id="edit-save" class="primary">Save</button>
+    </div>
+  </div>
 </div>
 
 <input type="file" id="folder-input" webkitdirectory multiple>
@@ -128,6 +158,8 @@ let metaVisible = true;
 let allMetaShown = false;
 let zoomTimeout = null;
 let objectUrls = new Map();
+let hasWriteAccess = false; // true when opened via File System Access API
+let currentDescription = "";
 
 // --- DOM ---
 const $ = id => document.getElementById(id);
@@ -148,54 +180,80 @@ const toggleMetaBtn = $("toggle-meta-btn");
 const zoomInd = $("zoom-indicator");
 const folderInput = $("folder-input");
 const splitter = $("splitter");
+const editBtn = $("edit-desc-btn");
+const editModal = $("edit-modal");
+const editTextarea = $("edit-textarea");
 
 // --- Folder loading ---
-$("open-btn").addEventListener("click", () => folderInput.click());
+const hasFSAccess = typeof window.showDirectoryPicker === "function";
+
+$("open-btn").addEventListener("click", () => {
+  if (hasFSAccess) { openFolderFSAccess(); } else { folderInput.click(); }
+});
 folderInput.addEventListener("change", onFolderSelected);
+
+async function openFolderFSAccess() {
+  let dirHandle;
+  try { dirHandle = await window.showDirectoryPicker(); } catch (_) { return; }
+  cleanup();
+  statusBar.textContent = "Scanning...";
+  hasWriteAccess = true;
+
+  const groupsMap = new Map();
+  await scanDir(dirHandle, dirHandle.name, groupsMap);
+  buildFlatList(groupsMap);
+}
+
+async function scanDir(dirHandle, relPath, groupsMap) {
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === "file") {
+      const ext = entry.name.lastIndexOf(".") >= 0 ? entry.name.substring(entry.name.lastIndexOf(".")).toLowerCase() : "";
+      if (!SUPPORTED_EXT.has(ext)) continue;
+      if (!groupsMap.has(relPath)) groupsMap.set(relPath, []);
+      groupsMap.get(relPath).push({ handle: entry, name: entry.name });
+    } else if (entry.kind === "directory") {
+      await scanDir(entry, relPath + "/" + entry.name, groupsMap);
+    }
+  }
+}
 
 function onFolderSelected(e) {
   const files = Array.from(e.target.files);
   if (!files.length) return;
-
-  // Clean up old object URLs
-  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
-  objectUrls.clear();
-
+  cleanup();
+  hasWriteAccess = false;
   statusBar.textContent = "Scanning...";
 
   const groupsMap = new Map();
   for (const file of files) {
-    const name = file.name;
-    const ext = name.lastIndexOf(".") >= 0 ? name.substring(name.lastIndexOf(".")).toLowerCase() : "";
+    const ext = file.name.lastIndexOf(".") >= 0 ? file.name.substring(file.name.lastIndexOf(".")).toLowerCase() : "";
     if (!SUPPORTED_EXT.has(ext)) continue;
-
-    const path = file.webkitRelativePath || name;
+    const path = file.webkitRelativePath || file.name;
     const parts = path.split("/");
-    // Directory is everything except the filename; for root it's the folder name
-    let dir;
-    if (parts.length > 2) {
-      dir = parts.slice(1, -1).join("/");
-    } else {
-      dir = parts[0]; // root folder name
-    }
-
+    const dir = parts.length > 2 ? parts.slice(1, -1).join("/") : parts[0];
     if (!groupsMap.has(dir)) groupsMap.set(dir, []);
-    groupsMap.get(dir).push({ file, name, relPath: path });
+    groupsMap.get(dir).push({ file, name: file.name });
   }
+  buildFlatList(groupsMap);
+  folderInput.value = "";
+}
 
+function cleanup() {
+  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
+  objectUrls.clear();
+}
+
+function buildFlatList(groupsMap) {
   const sortedDirs = Array.from(groupsMap.keys()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-
-  groups = [];
-  flat = [];
-  groupBounds = [];
+  groups = []; flat = []; groupBounds = [];
 
   for (const dir of sortedDirs) {
     const images = groupsMap.get(dir).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
     const groupIdx = groups.length;
     groups.push({ dir, images });
     groupBounds.push(flat.length);
-    for (const img of images) {
-      flat.push({ file: img.file, name: img.name, dir, groupIdx });
+    for (const item of images) {
+      flat.push({ ...item, dir, groupIdx });
     }
   }
 
@@ -205,11 +263,9 @@ function onFolderSelected(e) {
     statusBar.textContent = "No images found in folder";
     return;
   }
-
   showEmpty(false);
   navigateTo(0);
   statusBar.textContent = `Found ${flat.length} images in ${groups.length} directories`;
-  folderInput.value = "";
 }
 
 function showEmpty(show) {
@@ -241,14 +297,23 @@ function navigateTo(index) {
   loadMetadata(entry);
 }
 
-function loadImage(entry) {
-  statusBar.textContent = "Loading...";
+async function getFile(entry) {
+  if (entry.file) return entry.file;
+  if (entry.handle) return await entry.handle.getFile();
+  return null;
+}
 
-  let url = objectUrls.get(entry.file);
-  if (!url) {
-    url = URL.createObjectURL(entry.file);
-    objectUrls.set(entry.file, url);
-  }
+async function loadImage(entry) {
+  statusBar.textContent = "Loading...";
+  const file = await getFile(entry);
+  if (!file) { statusBar.textContent = "Error: cannot read file"; return; }
+
+  // Revoke old URL for this entry if file changed (e.g. after edit)
+  const key = entry.handle || entry.file;
+  let url = objectUrls.get(key);
+  if (url) URL.revokeObjectURL(url);
+  url = URL.createObjectURL(file);
+  objectUrls.set(key, url);
 
   const tempImg = new Image();
   tempImg.onload = () => {
@@ -375,43 +440,37 @@ window.addEventListener("mousemove", e => {
 window.addEventListener("mouseup", () => { splitting = false; });
 
 // --- Metadata ---
+const WRITABLE_EXT = new Set([".jpg",".jpeg",".png",".tiff",".tif",".webp"]);
+
 async function loadMetadata(entry) {
-  const file = entry.file;
+  const file = await getFile(entry);
+  if (!file) return;
   const tags = {};
 
-  // File info
   const sizeStr = file.size < 1024 ? `${file.size} B`
     : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB`
     : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-
   const ext = entry.name.lastIndexOf(".") >= 0 ? entry.name.substring(entry.name.lastIndexOf(".") + 1).toUpperCase() : "Unknown";
+  const extLower = "." + ext.toLowerCase();
 
-  const fileInfoLines = [];
-  fileInfoLines.push(`File Size: ${sizeStr}`);
-  fileInfoLines.push(`Format: ${ext}`);
+  const fileInfoLines = [`File Size: ${sizeStr}`, `Format: ${ext}`];
   if (imgNaturalW && imgNaturalH) fileInfoLines.push(`Dimensions: ${imgNaturalW} × ${imgNaturalH}`);
-  if (file.lastModified) {
-    fileInfoLines.push(`Modified: ${new Date(file.lastModified).toLocaleString()}`);
-  }
+  if (file.lastModified) fileInfoLines.push(`Modified: ${new Date(file.lastModified).toLocaleString()}`);
   tags["File Size"] = sizeStr;
   tags["Format"] = ext;
   if (imgNaturalW && imgNaturalH) tags["Dimensions"] = `${imgNaturalW} × ${imgNaturalH}`;
-
   fileInfo.innerHTML = fileInfoLines.map(l => escHtml(l)).join("<br>");
 
-  // Try reading EXIF
   let description = null;
   try {
     const exifData = await readExif(file);
     if (exifData) {
-      for (const [k, v] of Object.entries(exifData.tags)) {
-        tags[k] = v;
-      }
+      for (const [k, v] of Object.entries(exifData.tags)) tags[k] = v;
       description = exifData.description;
     }
   } catch (_) {}
 
-  // Description
+  currentDescription = description || "";
   if (description) {
     descText.textContent = description;
     descText.classList.remove("empty");
@@ -420,17 +479,15 @@ async function loadMetadata(entry) {
     descText.classList.add("empty");
   }
 
-  // All tags table
+  // Enable edit button only with write access and writable format
+  editBtn.disabled = !(hasWriteAccess && entry.handle && WRITABLE_EXT.has(extLower));
+
   metaTableBody.innerHTML = "";
-  const sortedKeys = Object.keys(tags).sort();
-  for (const key of sortedKeys) {
+  for (const key of Object.keys(tags).sort()) {
     const tr = document.createElement("tr");
-    const td1 = document.createElement("td");
-    td1.textContent = key;
-    const td2 = document.createElement("td");
-    td2.textContent = tags[key];
-    tr.appendChild(td1);
-    tr.appendChild(td2);
+    const td1 = document.createElement("td"); td1.textContent = key;
+    const td2 = document.createElement("td"); td2.textContent = tags[key];
+    tr.appendChild(td1); tr.appendChild(td2);
     metaTableBody.appendChild(tr);
   }
 }
@@ -766,7 +823,7 @@ document.addEventListener("keydown", e => {
   // Ctrl+O
   if ((e.ctrlKey || e.metaKey) && e.key === "o") {
     e.preventDefault();
-    folderInput.click();
+    if (hasFSAccess) { openFolderFSAccess(); } else { folderInput.click(); }
     return;
   }
 
@@ -831,6 +888,315 @@ viewport.addEventListener("dblclick", () => {
   fitMode = true;
   fitInView();
 });
+
+// --- Edit Description ---
+editBtn.addEventListener("click", () => {
+  editTextarea.value = currentDescription;
+  editModal.classList.add("open");
+  editTextarea.focus();
+});
+$("edit-cancel").addEventListener("click", () => editModal.classList.remove("open"));
+editModal.addEventListener("click", e => { if (e.target === editModal) editModal.classList.remove("open"); });
+$("edit-save").addEventListener("click", async () => {
+  const newText = editTextarea.value;
+  editModal.classList.remove("open");
+  const entry = flat[currentIndex];
+  if (!entry || !entry.handle) return;
+  try {
+    await writeDescription(entry.handle, newText);
+    statusBar.textContent = "Description saved";
+    loadMetadata(entry);
+  } catch (e) {
+    statusBar.textContent = `Error saving: ${e.message}`;
+  }
+});
+
+async function writeDescription(fileHandle, description) {
+  const file = await fileHandle.getFile();
+  const buf = await file.arrayBuffer();
+  const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+  let newBuf;
+  if (ext === ".png") {
+    newBuf = writePngDescription(buf, description);
+  } else if (ext === ".jpg" || ext === ".jpeg") {
+    newBuf = writeJpegDescription(buf, description);
+  } else {
+    throw new Error("Unsupported format for description editing");
+  }
+  const writable = await fileHandle.createWritable();
+  await writable.write(newBuf);
+  await writable.close();
+}
+
+function writeJpegDescription(buf, description) {
+  const view = new DataView(buf);
+  if (view.getUint16(0) !== 0xFFD8) throw new Error("Not a JPEG");
+
+  // Build a minimal EXIF APP1 with just ImageDescription (tag 270)
+  // We'll preserve existing APP1 EXIF and patch tag 270 in, or create new APP1
+  const descBytes = new TextEncoder().encode(description);
+  // Find existing APP1 EXIF
+  let app1Start = -1, app1Len = 0;
+  let offset = 2;
+  while (offset < view.byteLength - 4) {
+    const marker = view.getUint16(offset);
+    if (marker === 0xFFE1) {
+      const len = view.getUint16(offset + 2);
+      if (offset + 4 + 6 <= view.byteLength && view.getUint32(offset + 4) === 0x45786966 && view.getUint16(offset + 8) === 0x0000) {
+        app1Start = offset;
+        app1Len = len + 2;
+      }
+      break;
+    } else if ((marker & 0xFF00) === 0xFF00) {
+      if (marker === 0xFFDA) break;
+      offset += 2 + view.getUint16(offset + 2);
+    } else { break; }
+  }
+
+  if (app1Start >= 0) {
+    // Patch existing EXIF: parse TIFF, rebuild IFD0 with new tag 270
+    const tiffStart = app1Start + 10;
+    const newExif = patchExifDescription(new Uint8Array(buf, tiffStart, app1Len - 10), descBytes);
+    // Build: Exif\0\0 + newExif
+    const app1Data = new Uint8Array(6 + newExif.length);
+    app1Data.set([0x45, 0x78, 0x69, 0x66, 0x00, 0x00]); // "Exif\0\0"
+    app1Data.set(newExif, 6);
+    const app1Size = 2 + app1Data.length; // length field includes itself
+    const before = new Uint8Array(buf, 0, app1Start);
+    const after = new Uint8Array(buf, app1Start + app1Len);
+    const result = new Uint8Array(before.length + 4 + app1Data.length + after.length);
+    result.set(before, 0);
+    let p = before.length;
+    result[p] = 0xFF; result[p+1] = 0xE1;
+    result[p+2] = (app1Size >> 8) & 0xFF; result[p+3] = app1Size & 0xFF;
+    result.set(app1Data, p + 4);
+    result.set(after, p + 4 + app1Data.length);
+    return result.buffer;
+  } else {
+    // No existing EXIF — create minimal one
+    const newExif = buildMinimalExif(descBytes);
+    const app1Data = new Uint8Array(6 + newExif.length);
+    app1Data.set([0x45, 0x78, 0x69, 0x66, 0x00, 0x00]);
+    app1Data.set(newExif, 6);
+    const app1Size = 2 + app1Data.length;
+    // Insert after SOI (first 2 bytes)
+    const result = new Uint8Array(2 + 4 + app1Data.length + buf.byteLength - 2);
+    result[0] = 0xFF; result[1] = 0xD8;
+    result[2] = 0xFF; result[3] = 0xE1;
+    result[4] = (app1Size >> 8) & 0xFF; result[5] = app1Size & 0xFF;
+    result.set(app1Data, 6);
+    result.set(new Uint8Array(buf, 2), 6 + app1Data.length);
+    return result.buffer;
+  }
+}
+
+function buildMinimalExif(descBytes) {
+  // Big-endian TIFF with one IFD entry: tag 270 (ImageDescription)
+  const count = descBytes.length + 1; // +1 for null terminator
+  const ifdEntries = 1;
+  const ifdSize = 2 + ifdEntries * 12 + 4; // count + entries + next_ifd
+  const dataOffset = 8 + ifdSize; // after TIFF header + IFD
+  const totalSize = dataOffset + count;
+  const out = new Uint8Array(totalSize);
+  const dv = new DataView(out.buffer);
+  // TIFF header: big-endian
+  out[0] = 0x4D; out[1] = 0x4D; // "MM"
+  dv.setUint16(2, 0x002A);
+  dv.setUint32(4, 8); // IFD0 offset
+  // IFD0
+  dv.setUint16(8, ifdEntries);
+  // Entry: tag=270, type=2(ASCII), count, value offset
+  dv.setUint16(10, 0x010E);
+  dv.setUint16(12, 2); // ASCII
+  dv.setUint32(14, count);
+  dv.setUint32(18, dataOffset);
+  dv.setUint32(22, 0); // next IFD = 0
+  // Data
+  out.set(descBytes, dataOffset);
+  out[dataOffset + descBytes.length] = 0; // null terminator
+  return out;
+}
+
+function patchExifDescription(tiffBytes, descBytes) {
+  // Parse the TIFF, find/replace tag 270, rebuild
+  const buf = tiffBytes.buffer.slice(tiffBytes.byteOffset, tiffBytes.byteOffset + tiffBytes.byteLength);
+  const view = new DataView(buf);
+  const le = view.getUint16(0) === 0x4949;
+  const ifd0Off = view.getUint32(4, le);
+
+  if (ifd0Off + 2 > buf.byteLength) return buildMinimalExif(descBytes);
+  const entryCount = view.getUint16(ifd0Off, le);
+
+  // Collect all IFD0 entries (raw 12-byte each), their external data, and track tag 270
+  const entries = [];
+  const externalData = [];
+  let has270 = false;
+  for (let i = 0; i < entryCount; i++) {
+    const eOff = ifd0Off + 2 + i * 12;
+    if (eOff + 12 > buf.byteLength) break;
+    const tagId = view.getUint16(eOff, le);
+    const type = view.getUint16(eOff + 2, le);
+    const cnt = view.getUint32(eOff + 4, le);
+    if (tagId === 0x010E) { has270 = true; continue; } // skip old 270
+    const typeSize = { 1:1, 2:1, 3:2, 4:4, 5:8, 7:1, 9:4, 10:8, 12:8 };
+    const dataSize = (typeSize[type] || 1) * cnt;
+    let rawData = null;
+    if (dataSize > 4) {
+      const dataOff = view.getUint32(eOff + 8, le);
+      if (dataOff + dataSize <= buf.byteLength) {
+        rawData = new Uint8Array(buf, dataOff, dataSize);
+      }
+    }
+    entries.push({ tagId, type, cnt, valueBytes: new Uint8Array(buf, eOff + 8, 4), rawData });
+  }
+
+  // Now rebuild: TIFF header + IFD0 with entries + tag 270 + external data
+  const newEntryCount = entries.length + 1; // existing (minus old 270) + new 270
+  const descCount = descBytes.length + 1;
+  const ifdStart = 8;
+  const ifdBodySize = 2 + newEntryCount * 12 + 4;
+  // External data starts after IFD
+  let extOff = ifdStart + ifdBodySize;
+
+  // Build entries sorted by tag (TIFF requires sorted tags)
+  const allEntries = [...entries, { tagId: 0x010E, type: 2, cnt: descCount, rawData: null, isDesc: true }];
+  allEntries.sort((a, b) => a.tagId - b.tagId);
+
+  // First pass: calculate total size
+  let totalExt = 0;
+  for (const e of allEntries) {
+    if (e.isDesc) { totalExt += descCount; }
+    else if (e.rawData) { totalExt += e.rawData.length; }
+  }
+  const totalSize = ifdStart + ifdBodySize + totalExt;
+  const out = new Uint8Array(totalSize);
+  const outView = new DataView(out.buffer);
+
+  // TIFF header
+  if (le) { out[0] = 0x49; out[1] = 0x49; } else { out[0] = 0x4D; out[1] = 0x4D; }
+  outView.setUint16(2, 0x002A, le);
+  outView.setUint32(4, ifdStart, le);
+
+  // IFD0
+  outView.setUint16(ifdStart, newEntryCount, le);
+  let curExt = extOff;
+  for (let i = 0; i < allEntries.length; i++) {
+    const e = allEntries[i];
+    const off = ifdStart + 2 + i * 12;
+    outView.setUint16(off, e.tagId, le);
+    outView.setUint16(off + 2, e.type, le);
+    outView.setUint32(off + 4, e.cnt, le);
+
+    if (e.isDesc) {
+      if (descCount <= 4) {
+        const tmp = new Uint8Array(4);
+        tmp.set(descBytes); tmp[descBytes.length] = 0;
+        out.set(tmp, off + 8);
+      } else {
+        outView.setUint32(off + 8, curExt, le);
+        out.set(descBytes, curExt);
+        out[curExt + descBytes.length] = 0;
+        curExt += descCount;
+      }
+    } else if (e.rawData) {
+      outView.setUint32(off + 8, curExt, le);
+      out.set(e.rawData, curExt);
+      curExt += e.rawData.length;
+    } else {
+      out.set(e.valueBytes, off + 8);
+    }
+  }
+  outView.setUint32(ifdStart + 2 + newEntryCount * 12, 0, le); // next IFD = 0
+  return out;
+}
+
+function writePngDescription(buf, description) {
+  const view = new DataView(buf);
+  if (view.getUint32(0) !== 0x89504E47) throw new Error("Not a PNG");
+
+  // Collect all chunks, removing old "Description" tEXt chunks
+  const chunks = [];
+  let offset = 8;
+  while (offset + 8 <= buf.byteLength) {
+    const len = view.getUint32(offset);
+    const typeBytes = new Uint8Array(buf, offset + 4, 4);
+    const chunkType = String.fromCharCode(...typeBytes);
+    const chunkTotal = 12 + len; // length(4) + type(4) + data(len) + crc(4)
+    if (offset + chunkTotal > buf.byteLength) break;
+    const chunkData = new Uint8Array(buf, offset, chunkTotal);
+
+    // Skip existing Description tEXt
+    if (chunkType === "tEXt") {
+      const data = new Uint8Array(buf, offset + 8, len);
+      const nullIdx = data.indexOf(0);
+      if (nullIdx > 0) {
+        const key = new TextDecoder("latin1").decode(data.slice(0, nullIdx));
+        if (key.toLowerCase() === "description") { offset += chunkTotal; continue; }
+      }
+    }
+    chunks.push({ type: chunkType, raw: new Uint8Array(chunkData) });
+    offset += chunkTotal;
+  }
+
+  // Build new tEXt chunk: "Description\0<text>"
+  const keyBytes = new TextEncoder().encode("Description");
+  const valBytes = new TextEncoder().encode(description);
+  const tEXtData = new Uint8Array(keyBytes.length + 1 + valBytes.length);
+  tEXtData.set(keyBytes);
+  tEXtData[keyBytes.length] = 0;
+  tEXtData.set(valBytes, keyBytes.length + 1);
+  const newChunk = buildPngChunk("tEXt", tEXtData);
+
+  // Insert before first IDAT
+  const idatIdx = chunks.findIndex(c => c.type === "IDAT");
+  const insertAt = idatIdx >= 0 ? idatIdx : chunks.length - 1;
+
+  // Calculate total size
+  let totalSize = 8; // PNG signature
+  for (let i = 0; i < chunks.length; i++) {
+    if (i === insertAt) totalSize += newChunk.length;
+    totalSize += chunks[i].raw.length;
+  }
+  if (insertAt >= chunks.length) totalSize += newChunk.length;
+
+  const result = new Uint8Array(totalSize);
+  result.set(new Uint8Array(buf, 0, 8)); // PNG signature
+  let p = 8;
+  for (let i = 0; i < chunks.length; i++) {
+    if (i === insertAt) { result.set(newChunk, p); p += newChunk.length; }
+    result.set(chunks[i].raw, p); p += chunks[i].raw.length;
+  }
+  if (insertAt >= chunks.length) { result.set(newChunk, p); }
+  return result.buffer;
+}
+
+function buildPngChunk(type, data) {
+  const chunk = new Uint8Array(12 + data.length);
+  const dv = new DataView(chunk.buffer);
+  dv.setUint32(0, data.length);
+  for (let i = 0; i < 4; i++) chunk[4 + i] = type.charCodeAt(i);
+  chunk.set(data, 8);
+  // CRC over type + data
+  const crc = crc32(chunk.subarray(4, 8 + data.length));
+  dv.setUint32(8 + data.length, crc);
+  return chunk;
+}
+
+// CRC32 for PNG
+const crcTable = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
 </script>
 </body>
 </html>
