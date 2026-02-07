@@ -22,12 +22,23 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 /* Main content area */
 #content { display: flex; flex: 1; overflow: hidden; position: relative; }
 
+/* Directory tree panel (left) */
+#dir-panel { width: 220px; background: #2d2d2d; overflow-y: auto; flex-shrink: 0; border-right: 1px solid #444; display: none; }
+#dir-panel .dir-entry { padding: 5px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #bbb; border-left: 3px solid transparent; }
+#dir-panel .dir-entry:hover { background: #3a3a3a; }
+#dir-panel .dir-entry.active { background: #333; color: #fff; border-left-color: #2a82da; }
+#dir-panel .dir-count { color: #777; font-size: 11px; margin-left: 4px; }
+
+/* Left splitter */
+.panel-splitter { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; display: none; }
+.panel-splitter:hover { background: #2a82da; }
+
 /* Image viewport */
 #viewport { flex: 1; overflow: hidden; position: relative; background: #000; cursor: grab; }
 #viewport.dragging { cursor: grabbing; }
 #viewport img { position: absolute; transform-origin: 0 0; image-rendering: auto; user-select: none; -webkit-user-drag: none; }
 
-/* Splitter */
+/* Right splitter */
 #splitter { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; }
 #splitter:hover { background: #2a82da; }
 
@@ -95,6 +106,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   </div>
 
   <div id="content">
+    <div id="dir-panel"></div>
+    <div class="panel-splitter" id="left-splitter"></div>
     <div id="viewport">
       <img id="image" alt="">
       <div id="zoom-indicator"></div>
@@ -118,7 +131,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 
   <div id="controls-bar">
     &#x2190;&#x2192; Navigate &nbsp;|&nbsp; &#x2191;&#x2193; / Scroll Zoom &nbsp;|&nbsp;
-    PgUp/PgDn Groups &nbsp;|&nbsp; Home/End First/Last &nbsp;|&nbsp;
+    PgUp/PgDn Directory &nbsp;|&nbsp; Home/End First/Last &nbsp;|&nbsp;
     F Fit &nbsp;|&nbsp; M Metadata &nbsp;|&nbsp; Ctrl+O Open
   </div>
   <div id="status-bar">Ready — Ctrl+O to open a folder</div>
@@ -183,6 +196,8 @@ const splitter = $("splitter");
 const editBtn = $("edit-desc-btn");
 const editModal = $("edit-modal");
 const editTextarea = $("edit-textarea");
+const dirPanel = $("dir-panel");
+const leftSplitter = $("left-splitter");
 
 // --- Folder loading ---
 const hasFSAccess = typeof window.showDirectoryPicker === "function";
@@ -260,10 +275,13 @@ function buildFlatList(groupsMap) {
   if (flat.length === 0) {
     currentIndex = -1;
     showEmpty(true);
+    dirPanel.style.display = "none";
+    leftSplitter.style.display = "none";
     statusBar.textContent = "No images found in folder";
     return;
   }
   showEmpty(false);
+  renderDirTree();
   navigateTo(0);
   statusBar.textContent = `Found ${flat.length} images in ${groups.length} directories`;
 }
@@ -272,6 +290,51 @@ function showEmpty(show) {
   emptyMsg.style.display = show ? "block" : "none";
   img.style.display = show ? "none" : "block";
 }
+
+// --- Directory tree ---
+function renderDirTree() {
+  dirPanel.innerHTML = "";
+  dirPanel.style.display = "block";
+  leftSplitter.style.display = "block";
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    const el = document.createElement("div");
+    el.className = "dir-entry";
+    el.dataset.groupIdx = i;
+    const count = g.images.length;
+    el.innerHTML = escHtml(g.dir) + `<span class="dir-count">(${count})</span>`;
+    el.title = g.dir;
+    el.addEventListener("click", () => navigateTo(groupBounds[i]));
+    dirPanel.appendChild(el);
+  }
+}
+
+function highlightDirEntry(groupIdx) {
+  const entries = dirPanel.querySelectorAll(".dir-entry");
+  for (const e of entries) {
+    e.classList.toggle("active", parseInt(e.dataset.groupIdx) === groupIdx);
+  }
+  // Scroll active entry into view
+  const active = dirPanel.querySelector(".dir-entry.active");
+  if (active) active.scrollIntoView({ block: "nearest" });
+}
+
+// --- Left splitter resize ---
+let leftSplitting = false, leftSplitStartX = 0, leftSplitStartW = 0;
+leftSplitter.addEventListener("mousedown", e => {
+  leftSplitting = true;
+  leftSplitStartX = e.clientX;
+  leftSplitStartW = dirPanel.offsetWidth;
+  e.preventDefault();
+});
+window.addEventListener("mousemove", e => {
+  if (!leftSplitting) return;
+  const delta = e.clientX - leftSplitStartX;
+  const newW = Math.max(120, Math.min(500, leftSplitStartW + delta));
+  dirPanel.style.width = newW + "px";
+  if (fitMode && imgNaturalW) fitInView();
+});
+window.addEventListener("mouseup", () => { leftSplitting = false; });
 
 // --- Navigation ---
 function navigateTo(index) {
@@ -288,7 +351,10 @@ function navigateTo(index) {
   const groupStart = groupBounds[gi];
   const groupSize = gi + 1 < groupBounds.length ? groupBounds[gi + 1] - groupStart : flat.length - groupStart;
   const posInGroup = index - groupStart;
-  posLabel.textContent = `${posInGroup + 1}/${groupSize} in group  |  ${index + 1}/${flat.length} total`;
+  posLabel.textContent = `${posInGroup + 1}/${groupSize} in dir  |  ${index + 1}/${flat.length} total`;
+
+  // Highlight active directory in tree
+  highlightDirEntry(gi);
 
   // Load image
   loadImage(entry);
