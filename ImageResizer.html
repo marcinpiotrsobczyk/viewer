@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Resizer</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; background: #1e1e1e; color: #d0d0d0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; }
+
+/* Layout */
+#app { display: flex; flex-direction: column; height: 100vh; }
+#topBar { display: flex; align-items: center; padding: 4px 10px; background: #2d2d2d;
+  border-bottom: 1px solid #444; min-height: 34px; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+#mainArea { display: flex; flex: 1; min-height: 0; }
+#controlsBar { display: flex; align-items: center; justify-content: center; padding: 3px 10px;
+  background: #252525; border-top: 1px solid #333; font-size: 9pt; color: #888; flex-shrink: 0; }
+#statusBar { display: flex; align-items: center; padding: 3px 10px; background: #2d2d2d;
+  border-top: 1px solid #444; font-size: 11px; color: #888; flex-shrink: 0; min-height: 24px; }
+
+/* Top Bar */
+.topBtn { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 4px 12px;
+  border-radius: 3px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.topBtn:hover { background: #4a4a4a; }
+.topSep { width: 1px; height: 18px; background: #555; flex-shrink: 0; }
+#topFileName { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#topDimensions { white-space: nowrap; color: #aaa; }
+.topLabel { color: #888; white-space: nowrap; font-size: 12px; }
+#selectionInfo { white-space: nowrap; color: #d0d0d0; font-size: 12px; }
+#scaleInput { width: 55px; background: #1e1e1e; color: #d0d0d0; border: 1px solid #555;
+  border-radius: 3px; padding: 3px 5px; font-size: 12px; text-align: right; }
+#btnResize { background: #444; color: #666; border: 1px solid #555; padding: 4px 14px;
+  border-radius: 3px; cursor: default; font-size: 12px; font-weight: bold; white-space: nowrap; }
+#btnResize.enabled { background: #2a8a2a; color: #fff; border-color: #2a8a2a; cursor: pointer; }
+#btnResize.enabled:hover { background: #33a333; }
+.topSpacer { margin-left: auto; }
+
+/* Tree Panel */
+#treePanel { width: 250px; min-width: 120px; max-width: 500px; background: #2d2d2d;
+  border-right: 1px solid #444; overflow-y: auto; flex-shrink: 0; display: none; }
+#treePanel.visible { display: block; }
+.treeDir { cursor: pointer; user-select: none; }
+.treeDirHeader { padding: 4px 8px; display: flex; align-items: center; gap: 4px;
+  font-weight: bold; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.treeDirHeader:hover { background: #353535; }
+.treeDirArrow { flex-shrink: 0; width: 12px; text-align: center; font-size: 10px; color: #888; }
+.treeDirChildren { display: none; }
+.treeDirChildren.expanded { display: block; }
+.treeFile { padding: 4px 8px; cursor: pointer; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-size: 12px; border-left: 3px solid transparent; }
+.treeFile:hover { background: #353535; }
+.treeFile.active { border-left-color: #2a82da; color: #fff; background: #353535; }
+
+/* Splitters */
+.splitter { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; }
+.splitter:hover, .splitter.dragging { background: #2a82da; }
+#leftSplitter { display: none; }
+#treePanel.visible ~ #leftSplitter { display: block; }
+
+/* Viewport */
+#viewport { flex: 1; position: relative; background: #000; overflow: hidden; cursor: crosshair;
+  min-width: 100px; }
+#viewport.panning { cursor: grabbing; }
+#viewportImg { position: absolute; top: 0; left: 0; transform-origin: 0 0; user-select: none;
+  -webkit-user-drag: none; image-rendering: auto; }
+#selectionOverlay { position: absolute; inset: 0; z-index: 10; pointer-events: auto; }
+#emptyState { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #888; font-size: 15px; text-align: center; padding: 20px; pointer-events: none; z-index: 5; }
+#zoomIndicator { position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.7);
+  color: #ccc; padding: 4px 10px; border-radius: 4px; font-size: 12px; opacity: 0;
+  transition: opacity 0.3s; pointer-events: none; z-index: 20; }
+#zoomIndicator.show { opacity: 1; }
+
+/* Hidden file input */
+#folderInput { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topBar">
+    <button class="topBtn" id="btnOpen">Open Folder</button>
+    <div class="topSep"></div>
+    <span id="topFileName"></span>
+    <span id="topDimensions"></span>
+    <div class="topSpacer"></div>
+    <span class="topLabel">Selection:</span>
+    <span id="selectionInfo">None</span>
+    <div class="topSep"></div>
+    <span class="topLabel">Scale:</span>
+    <input type="number" id="scaleInput" value="100" min="1" max="1000">
+    <span class="topLabel">%</span>
+    <div class="topSep"></div>
+    <button id="btnResize" title="Select an area first">RESIZE</button>
+    <button class="topBtn" id="btnReset">Reset Selection</button>
+  </div>
+  <div id="mainArea">
+    <div id="treePanel"></div>
+    <div class="splitter" id="leftSplitter"></div>
+    <div id="viewport">
+      <img id="viewportImg" style="display:none" draggable="false">
+      <canvas id="selectionOverlay"></canvas>
+      <div id="emptyState">No images loaded.<br>Use <b>Ctrl+O</b> or the <b>Open Folder</b> button to open a folder.</div>
+      <div id="zoomIndicator"></div>
+    </div>
+  </div>
+  <div id="controlsBar">Drag to select &nbsp;|&nbsp; Space+Drag Pan &nbsp;|&nbsp; Scroll Zoom &nbsp;|&nbsp; DblClick Fit &nbsp;|&nbsp; F Fit &nbsp;|&nbsp; Esc Clear &nbsp;|&nbsp; &uarr;&darr; Prev/Next &nbsp;|&nbsp; Ctrl+O Open</div>
+  <div id="statusBar"><span id="statusText">Ready</span></div>
+</div>
+
+<input type="file" id="folderInput" webkitdirectory multiple>
+
+<script>
+(function(){
+"use strict";
+
+// --- Refs ---
+const $btnOpen = document.getElementById('btnOpen');
+const $folderInput = document.getElementById('folderInput');
+const $topFileName = document.getElementById('topFileName');
+const $topDimensions = document.getElementById('topDimensions');
+const $selectionInfo = document.getElementById('selectionInfo');
+const $scaleInput = document.getElementById('scaleInput');
+const $btnResize = document.getElementById('btnResize');
+const $btnReset = document.getElementById('btnReset');
+const $treePanel = document.getElementById('treePanel');
+const $leftSplitter = document.getElementById('leftSplitter');
+const $viewport = document.getElementById('viewport');
+const $img = document.getElementById('viewportImg');
+const $overlay = document.getElementById('selectionOverlay');
+const $emptyState = document.getElementById('emptyState');
+const $zoomInd = document.getElementById('zoomIndicator');
+const $statusText = document.getElementById('statusText');
+const overlayCtx = $overlay.getContext('2d');
+
+// --- State ---
+const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','bmp','webp','tiff','tif','svg','avif']);
+const SAVE_EXTS = new Set(['jpg','jpeg','png','webp']);
+let allEntries = [];   // [{handle/file, name, dir, fullPath}]
+let flat = [];         // flattened image entries (sorted by fullPath)
+let currentIdx = -1;
+let currentEntry = null;
+let rootDirName = '';
+let useFSAPI = false;
+let zoom = 1, panX = 0, panY = 0;
+let naturalW = 0, naturalH = 0;
+let isFitMode = true;
+const urlCache = new Map();
+let zoomTimer = null;
+
+// Selection state (in image pixel coords)
+let selActive = false; // has a completed selection
+let selDragging = false;
+let selImgX1 = 0, selImgY1 = 0, selImgX2 = 0, selImgY2 = 0;
+
+// Pan state
+let spaceDown = false;
+let panning = false;
+let panDragStartX = 0, panDragStartY = 0, panStartX = 0, panStartY = 0;
+
+// --- Helpers ---
+function setStatus(msg) { $statusText.textContent = msg; }
+function fileExt(name) { const i = name.lastIndexOf('.'); return i >= 0 ? name.slice(i+1).toLowerCase() : ''; }
+function isImage(name) { return IMAGE_EXTS.has(fileExt(name)); }
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// --- Object URL Management ---
+async function createObjectURL(entry) {
+  revokeObjectURL(entry);
+  let file;
+  if (entry.handle) file = await entry.handle.getFile();
+  else file = entry.file;
+  const url = URL.createObjectURL(file);
+  urlCache.set(entry, url);
+  return url;
+}
+function revokeObjectURL(entry) {
+  if (urlCache.has(entry)) {
+    URL.revokeObjectURL(urlCache.get(entry));
+    urlCache.delete(entry);
+  }
+}
+function revokeAllURLs() {
+  for (const url of urlCache.values()) URL.revokeObjectURL(url);
+  urlCache.clear();
+}
+
+// --- Folder Opening ---
+$btnOpen.addEventListener('click', openFolder);
+
+async function openFolder() {
+  if (window.showDirectoryPicker) {
+    try {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      useFSAPI = true;
+      rootDirName = dirHandle.name;
+      setStatus('Scanning...');
+      const entries = [];
+      await scanDir(dirHandle, '', entries);
+      processEntries(entries);
+    } catch(e) {
+      if (e.name !== 'AbortError') setStatus('Error: ' + e.message);
+      return;
+    }
+  } else {
+    $folderInput.click();
+    return;
+  }
+}
+
+$folderInput.addEventListener('change', function() {
+  const files = Array.from(this.files);
+  if (!files.length) return;
+  useFSAPI = false;
+  const parts = (files[0].webkitRelativePath || '').split('/');
+  rootDirName = parts[0] || 'Folder';
+  setStatus('Scanning...');
+  const entries = [];
+  for (const f of files) {
+    if (!isImage(f.name)) continue;
+    const rel = f.webkitRelativePath || f.name;
+    const segs = rel.split('/');
+    const dir = segs.length > 2 ? segs.slice(1, segs.length-1).join('/') : '';
+    const fullPath = dir ? dir + '/' + f.name : f.name;
+    entries.push({ file: f, name: f.name, dir, fullPath });
+  }
+  processEntries(entries);
+  this.value = '';
+});
+
+async function scanDir(dirHandle, path, entries) {
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file' && isImage(entry.name)) {
+      const fullPath = path ? path + '/' + entry.name : entry.name;
+      entries.push({ handle: entry, name: entry.name, dir: path, fullPath });
+    } else if (entry.kind === 'directory') {
+      await scanDir(entry, path ? path + '/' + entry.name : entry.name, entries);
+    }
+  }
+}
+
+function processEntries(entries) {
+  revokeAllURLs();
+  allEntries = entries;
+  flat = entries.slice().sort((a,b) => a.fullPath.toLowerCase().localeCompare(b.fullPath.toLowerCase()));
+  buildTree();
+  if (flat.length > 0) {
+    setStatus('Found ' + flat.length + ' images.');
+    selectFile(flat[0]);
+  } else {
+    currentIdx = -1;
+    currentEntry = null;
+    $img.style.display = 'none';
+    $emptyState.style.display = 'flex';
+    setStatus('No images found.');
+    updateTopBar();
+  }
+}
+
+// --- Hierarchical Tree ---
+function buildTree() {
+  $treePanel.innerHTML = '';
+  // Build nested structure
+  const root = { name: rootDirName, children: new Map(), files: [] };
+  for (const entry of flat) {
+    const parts = entry.dir ? entry.dir.split('/') : [];
+    let node = root;
+    for (const p of parts) {
+      if (!node.children.has(p)) {
+        node.children.set(p, { name: p, children: new Map(), files: [] });
+      }
+      node = node.children.get(p);
+    }
+    node.files.push(entry);
+  }
+  renderTreeNode(root, $treePanel, 0, true);
+  $treePanel.classList.add('visible');
+}
+
+function renderTreeNode(node, container, depth, startExpanded) {
+  const dirDiv = document.createElement('div');
+  dirDiv.className = 'treeDir';
+
+  const header = document.createElement('div');
+  header.className = 'treeDirHeader';
+  header.style.paddingLeft = (depth * 16 + 4) + 'px';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'treeDirArrow';
+  arrow.textContent = startExpanded ? '\u25BC' : '\u25B6';
+
+  const label = document.createElement('span');
+  label.textContent = node.name;
+
+  header.appendChild(arrow);
+  header.appendChild(label);
+  dirDiv.appendChild(header);
+
+  const childrenDiv = document.createElement('div');
+  childrenDiv.className = 'treeDirChildren' + (startExpanded ? ' expanded' : '');
+
+  // Sub-directories (sorted)
+  const sortedDirs = Array.from(node.children.entries()).sort((a,b) =>
+    a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
+  for (const [, child] of sortedDirs) {
+    renderTreeNode(child, childrenDiv, depth + 1, false);
+  }
+
+  // Files (already sorted)
+  for (const entry of node.files) {
+    const fileDiv = document.createElement('div');
+    fileDiv.className = 'treeFile';
+    fileDiv.style.paddingLeft = ((depth + 1) * 16 + 4) + 'px';
+    fileDiv.textContent = entry.name;
+    fileDiv.dataset.fullPath = entry.fullPath;
+    fileDiv.addEventListener('click', () => selectFile(entry));
+    childrenDiv.appendChild(fileDiv);
+  }
+
+  dirDiv.appendChild(childrenDiv);
+  container.appendChild(dirDiv);
+
+  header.addEventListener('click', () => {
+    const expanded = childrenDiv.classList.toggle('expanded');
+    arrow.textContent = expanded ? '\u25BC' : '\u25B6';
+  });
+}
+
+function updateTreeActive(entry) {
+  const allFiles = $treePanel.querySelectorAll('.treeFile');
+  allFiles.forEach(f => f.classList.toggle('active', f.dataset.fullPath === entry.fullPath));
+  const active = $treePanel.querySelector('.treeFile.active');
+  if (active) {
+    // Expand all parent directories
+    let parent = active.parentElement;
+    while (parent && parent !== $treePanel) {
+      if (parent.classList.contains('treeDirChildren')) {
+        parent.classList.add('expanded');
+        const arrow = parent.previousElementSibling?.querySelector('.treeDirArrow');
+        if (arrow) arrow.textContent = '\u25BC';
+      }
+      parent = parent.parentElement;
+    }
+    active.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// --- File Selection / Navigation ---
+async function selectFile(entry) {
+  currentIdx = flat.indexOf(entry);
+  currentEntry = entry;
+  clearSelection();
+  setStatus('Loading...');
+  $emptyState.style.display = 'none';
+
+  try {
+    const url = await createObjectURL(entry);
+    $img.onload = function() {
+      naturalW = $img.naturalWidth;
+      naturalH = $img.naturalHeight;
+      $img.style.width = naturalW + 'px';
+      $img.style.height = naturalH + 'px';
+      $img.style.display = 'block';
+      fitToView();
+      resizeOverlay();
+      drawSelection();
+      setStatus('Zoom: ' + Math.round(zoom * 100) + '%');
+    };
+    $img.src = url;
+  } catch(e) {
+    setStatus('Error loading image: ' + e.message);
+  }
+
+  updateTopBar();
+  updateTreeActive(entry);
+  updateResizeButton();
+}
+
+function updateTopBar() {
+  if (currentEntry) {
+    $topFileName.textContent = currentEntry.fullPath;
+    if (naturalW && naturalH) {
+      $topDimensions.textContent = naturalW + '\u00D7' + naturalH;
+    } else {
+      $topDimensions.textContent = '';
+    }
+  } else {
+    $topFileName.textContent = '';
+    $topDimensions.textContent = '';
+  }
+}
+
+// --- Image Display ---
+function fitToView() {
+  if (!naturalW || !naturalH) return;
+  const vw = $viewport.clientWidth, vh = $viewport.clientHeight;
+  zoom = Math.min(vw / naturalW, vh / naturalH);
+  panX = (vw - naturalW * zoom) / 2;
+  panY = (vh - naturalH * zoom) / 2;
+  isFitMode = true;
+  applyTransform();
+}
+
+function applyTransform() {
+  $img.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+  drawSelection();
+}
+
+function showZoomIndicator() {
+  $zoomInd.textContent = Math.round(zoom * 100) + '%';
+  $zoomInd.classList.add('show');
+  clearTimeout(zoomTimer);
+  zoomTimer = setTimeout(() => $zoomInd.classList.remove('show'), 1200);
+}
+
+function zoomAt(cx, cy, factor) {
+  const newZoom = Math.min(40, Math.max(0.02, zoom * factor));
+  const r = newZoom / zoom;
+  panX = cx - (cx - panX) * r;
+  panY = cy - (cy - panY) * r;
+  zoom = newZoom;
+  isFitMode = false;
+  applyTransform();
+  showZoomIndicator();
+  setStatus('Zoom: ' + Math.round(zoom * 100) + '%');
+}
+
+// --- Overlay Canvas ---
+function resizeOverlay() {
+  $overlay.width = $viewport.clientWidth;
+  $overlay.height = $viewport.clientHeight;
+}
+
+window.addEventListener('resize', () => {
+  resizeOverlay();
+  if (isFitMode && currentIdx >= 0) fitToView();
+  else drawSelection();
+});
+
+// Convert screen coords (relative to viewport) to image pixel coords
+function screenToImage(sx, sy) {
+  return {
+    x: (sx - panX) / zoom,
+    y: (sy - panY) / zoom
+  };
+}
+
+// Convert image pixel coords to screen coords (relative to viewport)
+function imageToScreen(ix, iy) {
+  return {
+    x: ix * zoom + panX,
+    y: iy * zoom + panY
+  };
+}
+
+// Get normalized selection rect in image coords (clamped to image)
+function getSelRect() {
+  let x1 = Math.min(selImgX1, selImgX2);
+  let y1 = Math.min(selImgY1, selImgY2);
+  let x2 = Math.max(selImgX1, selImgX2);
+  let y2 = Math.max(selImgY1, selImgY2);
+  // Clamp to image bounds
+  x1 = Math.max(0, Math.min(naturalW, x1));
+  y1 = Math.max(0, Math.min(naturalH, y1));
+  x2 = Math.max(0, Math.min(naturalW, x2));
+  y2 = Math.max(0, Math.min(naturalH, y2));
+  return { x: Math.round(x1), y: Math.round(y1),
+           w: Math.round(x2 - x1), h: Math.round(y2 - y1) };
+}
+
+function drawSelection() {
+  const cw = $overlay.width, ch = $overlay.height;
+  overlayCtx.clearRect(0, 0, cw, ch);
+
+  if (!selActive && !selDragging) return;
+
+  const r = getSelRect();
+  if (r.w < 1 || r.h < 1) return;
+
+  const tl = imageToScreen(r.x, r.y);
+  const br = imageToScreen(r.x + r.w, r.y + r.h);
+  const sx = tl.x, sy = tl.y, sw = br.x - tl.x, sh = br.y - tl.y;
+
+  // Dim area outside selection
+  overlayCtx.fillStyle = 'rgba(0,0,0,0.4)';
+  // Top
+  overlayCtx.fillRect(0, 0, cw, sy);
+  // Bottom
+  overlayCtx.fillRect(0, sy + sh, cw, ch - sy - sh);
+  // Left
+  overlayCtx.fillRect(0, sy, sx, sh);
+  // Right
+  overlayCtx.fillRect(sx + sw, sy, cw - sx - sw, sh);
+
+  // Selection fill
+  overlayCtx.fillStyle = 'rgba(42,130,218,0.2)';
+  overlayCtx.fillRect(sx, sy, sw, sh);
+
+  // Selection border
+  overlayCtx.strokeStyle = '#fff';
+  overlayCtx.lineWidth = 1;
+  overlayCtx.setLineDash([6, 3]);
+  overlayCtx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
+  overlayCtx.setLineDash([]);
+
+  // Dimension label
+  const label = r.w + '\u00D7' + r.h;
+  overlayCtx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  const tm = overlayCtx.measureText(label);
+  const lx = sx + sw / 2 - tm.width / 2;
+  const ly = sy > 24 ? sy - 6 : sy + sh + 16;
+  overlayCtx.fillStyle = 'rgba(0,0,0,0.7)';
+  overlayCtx.fillRect(lx - 4, ly - 13, tm.width + 8, 17);
+  overlayCtx.fillStyle = '#fff';
+  overlayCtx.fillText(label, lx, ly);
+}
+
+function updateSelectionInfo() {
+  if (selActive) {
+    const r = getSelRect();
+    $selectionInfo.textContent = r.w + '\u00D7' + r.h + ' at ' + r.x + ',' + r.y;
+  } else {
+    $selectionInfo.textContent = 'None';
+  }
+  updateResizeButton();
+}
+
+function clearSelection() {
+  selActive = false;
+  selDragging = false;
+  drawSelection();
+  updateSelectionInfo();
+}
+
+function updateResizeButton() {
+  const r = selActive ? getSelRect() : null;
+  const hasSel = r && r.w > 0 && r.h > 0;
+  const ext = currentEntry ? fileExt(currentEntry.name) : '';
+  const canSave = useFSAPI && SAVE_EXTS.has(ext);
+
+  if (hasSel && canSave) {
+    $btnResize.classList.add('enabled');
+    $btnResize.title = 'Crop and resize the selected area';
+  } else {
+    $btnResize.classList.remove('enabled');
+    if (!hasSel) {
+      $btnResize.title = 'Select an area first';
+    } else if (!useFSAPI) {
+      $btnResize.title = 'Requires Chrome/Edge with File System Access API';
+    } else {
+      $btnResize.title = 'Saving not supported for this format';
+    }
+  }
+}
+
+// --- Selection Mouse Handling ---
+$overlay.addEventListener('mousedown', e => {
+  if (e.button !== 0 || currentIdx < 0) return;
+  e.preventDefault();
+
+  const rect = $viewport.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+
+  if (spaceDown) {
+    // Start panning
+    panning = true;
+    panDragStartX = e.clientX;
+    panDragStartY = e.clientY;
+    panStartX = panX;
+    panStartY = panY;
+    $viewport.classList.add('panning');
+    return;
+  }
+
+  // Start selection
+  const imgCoords = screenToImage(sx, sy);
+  selImgX1 = imgCoords.x;
+  selImgY1 = imgCoords.y;
+  selImgX2 = imgCoords.x;
+  selImgY2 = imgCoords.y;
+  selDragging = true;
+  selActive = false;
+  drawSelection();
+});
+
+window.addEventListener('mousemove', e => {
+  if (panning) {
+    panX = panStartX + (e.clientX - panDragStartX);
+    panY = panStartY + (e.clientY - panDragStartY);
+    isFitMode = false;
+    applyTransform();
+    return;
+  }
+
+  if (!selDragging) return;
+
+  const rect = $viewport.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  const imgCoords = screenToImage(sx, sy);
+  selImgX2 = imgCoords.x;
+  selImgY2 = imgCoords.y;
+  drawSelection();
+});
+
+window.addEventListener('mouseup', e => {
+  if (panning) {
+    panning = false;
+    $viewport.classList.remove('panning');
+    return;
+  }
+
+  if (!selDragging) return;
+  selDragging = false;
+
+  const r = getSelRect();
+  if (r.w >= 1 && r.h >= 1) {
+    selActive = true;
+  } else {
+    selActive = false;
+  }
+  drawSelection();
+  updateSelectionInfo();
+});
+
+// Mouse wheel zoom
+$overlay.addEventListener('wheel', e => {
+  if (currentIdx < 0) return;
+  e.preventDefault();
+  const rect = $viewport.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  const factor = e.deltaY < 0 ? 1.25 : 1/1.25;
+  zoomAt(cx, cy, factor);
+}, { passive: false });
+
+// Double-click fit
+$overlay.addEventListener('dblclick', () => {
+  if (currentIdx >= 0) {
+    fitToView();
+    setStatus('Zoom: ' + Math.round(zoom * 100) + '%');
+  }
+});
+
+// --- Space key for panning ---
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' && !e.repeat && e.target.tagName !== 'INPUT') {
+    e.preventDefault();
+    spaceDown = true;
+    if (!panning) $viewport.style.cursor = 'grab';
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.key === ' ') {
+    spaceDown = false;
+    if (!panning) $viewport.style.cursor = 'crosshair';
+  }
+});
+
+// --- Resize & Save ---
+$btnResize.addEventListener('click', doResize);
+$btnReset.addEventListener('click', clearSelection);
+
+async function doResize() {
+  if (!$btnResize.classList.contains('enabled')) return;
+  if (!selActive || !currentEntry) return;
+
+  const r = getSelRect();
+  if (r.w < 1 || r.h < 1) return;
+
+  const scale = Math.max(1, Math.min(1000, parseInt($scaleInput.value) || 100));
+  const outW = Math.round(r.w * scale / 100);
+  const outH = Math.round(r.h * scale / 100);
+
+  if (outW < 1 || outH < 1) {
+    setStatus('Output dimensions too small.');
+    return;
+  }
+
+  setStatus('Resizing...');
+
+  try {
+    // Load original image fresh from file
+    let file;
+    if (currentEntry.handle) file = await currentEntry.handle.getFile();
+    else file = currentEntry.file;
+
+    const imgBitmap = await createImageBitmap(file);
+
+    // Create offscreen canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgBitmap, r.x, r.y, r.w, r.h, 0, 0, outW, outH);
+    imgBitmap.close();
+
+    // Determine MIME type
+    const ext = fileExt(currentEntry.name);
+    let mime = 'image/png';
+    let quality = undefined;
+    if (ext === 'jpg' || ext === 'jpeg') { mime = 'image/jpeg'; quality = 0.92; }
+    else if (ext === 'webp') { mime = 'image/webp'; quality = 0.92; }
+
+    // Convert to blob
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(b => {
+        if (b) resolve(b);
+        else reject(new Error('Failed to create blob'));
+      }, mime, quality);
+    });
+
+    // Write to file
+    if (!currentEntry.handle) {
+      setStatus('Cannot save: File System Access API not available.');
+      return;
+    }
+    const writable = await currentEntry.handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+
+    // Reload image
+    revokeObjectURL(currentEntry);
+    const url = await createObjectURL(currentEntry);
+    $img.onload = function() {
+      naturalW = $img.naturalWidth;
+      naturalH = $img.naturalHeight;
+      $img.style.width = naturalW + 'px';
+      $img.style.height = naturalH + 'px';
+      fitToView();
+      resizeOverlay();
+      clearSelection();
+      updateTopBar();
+      setStatus('Saved: ' + outW + '\u00D7' + outH + ' (' + mime + ')');
+    };
+    $img.src = url;
+  } catch(e) {
+    setStatus('Error resizing: ' + e.message);
+  }
+}
+
+// --- Keyboard Shortcuts ---
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    // Only intercept Ctrl+O in inputs
+    if (e.ctrlKey && e.key === 'o') { e.preventDefault(); openFolder(); }
+    return;
+  }
+
+  if (e.ctrlKey && e.key === 'o') {
+    e.preventDefault();
+    openFolder();
+    return;
+  }
+
+  switch(e.key) {
+    case 'Escape':
+    case 'Delete':
+      clearSelection();
+      break;
+    case 'f': case 'F':
+      if (currentIdx >= 0) {
+        fitToView();
+        setStatus('Zoom: ' + Math.round(zoom * 100) + '%');
+      }
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      if (currentIdx > 0) selectFile(flat[currentIdx - 1]);
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (currentIdx >= 0 && currentIdx < flat.length - 1) selectFile(flat[currentIdx + 1]);
+      break;
+  }
+});
+
+// --- Splitter ---
+function initSplitter(splitter, panel, side, minW, maxW) {
+  let startX, startW, active = false;
+  splitter.addEventListener('mousedown', e => {
+    e.preventDefault();
+    active = true;
+    startX = e.clientX;
+    startW = panel.offsetWidth;
+    splitter.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!active) return;
+    const dx = side === 'left' ? (e.clientX - startX) : (startX - e.clientX);
+    const newW = Math.min(maxW, Math.max(minW, startW + dx));
+    panel.style.width = newW + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!active) return;
+    active = false;
+    splitter.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    resizeOverlay();
+    if (isFitMode && currentIdx >= 0) fitToView();
+    else drawSelection();
+  });
+}
+
+initSplitter($leftSplitter, $treePanel, 'left', 120, 500);
+
+// --- Init ---
+resizeOverlay();
+
+})();
+</script>
+</body>
+</html>
