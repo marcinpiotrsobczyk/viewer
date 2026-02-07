@@ -820,6 +820,10 @@ function firstOfPrevGroup(flatIndex) {
 
 // --- Keyboard shortcuts ---
 document.addEventListener("keydown", e => {
+  if (editModal.classList.contains("open")) {
+    if (e.key === "Escape") editModal.classList.remove("open");
+    return;
+  }
   // Ctrl+O
   if ((e.ctrlKey || e.metaKey) && e.key === "o") {
     e.preventDefault();
