@@ -1,0 +1,1 @@
+Read plan.md and implement it fully. Create the file `ImageViewer.html` with all CSS and JS embedded inline. No external dependencies. Must work fully offline by opening the HTML file directly in a browser.
