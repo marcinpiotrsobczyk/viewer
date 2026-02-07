@@ -78,8 +78,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 #desc-header { display: flex; align-items: center; justify-content: space-between; }
 #desc-header h3 { margin: 0; }
 #edit-desc-btn { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 2px 10px; border-radius: 3px; cursor: pointer; font-size: 11px; }
-#edit-desc-btn:hover { background: #4a4a4a; }
-#edit-desc-btn:disabled { opacity: 0.4; cursor: default; }
+#edit-desc-btn:hover:not(:disabled) { background: #4a4a4a; }
+#edit-desc-btn:disabled { opacity: 0.4; cursor: default; background: #333; color: #666; border-color: #444; }
 
 /* Modal overlay */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
@@ -546,7 +546,11 @@ async function loadMetadata(entry) {
   }
 
   // Enable edit button only with write access and writable format
-  editBtn.disabled = !(hasWriteAccess && entry.handle && WRITABLE_EXT.has(extLower));
+  const canWrite = hasWriteAccess && entry.handle && WRITABLE_EXT.has(extLower);
+  editBtn.disabled = !canWrite;
+  editBtn.title = canWrite ? "Edit description" :
+    !hasWriteAccess ? "No write permission — use Chrome/Edge and Open Folder to enable editing" :
+    "Description editing not supported for this format";
 
   metaTableBody.innerHTML = "";
   for (const key of Object.keys(tags).sort()) {

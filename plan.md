@@ -97,7 +97,7 @@ Data structures:
 Width: 300px default. Resizable via splitter (min 150px, max 600px). Toggle with M key. Has class `hidden` when toggled off (+ hide its splitter).
 
 Contents:
-- **Description header row** with "Edit" button (right-aligned, disabled when no write access)
+- **Description header row** with "Edit" button (right-aligned, grayed out when no write access with explanatory tooltip)
 - **Description text** - shows `(No description)` in muted color when empty
 - Horizontal separator
 - **File info**: size (B/KB/MB), format, dimensions (W x H), last modified date
@@ -128,7 +128,7 @@ Read first 256KB of file into ArrayBuffer. Support:
 
 ### 7. Description Editing
 
-**Edit button**: Enabled only when opened via File System Access API AND file is writable format (.jpg, .jpeg, .png).
+**Edit button**: Enabled only when opened via File System Access API AND file is writable format (.jpg, .jpeg, .png). When disabled (no write permission or unsupported format), the button is visually grayed out (dimmed colors, no hover effect) with a tooltip explaining why editing is unavailable.
 
 **Modal dialog**: Dark themed overlay with textarea, Cancel and Save buttons. Pre-filled with current description.
 
