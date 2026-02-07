@@ -72,6 +72,19 @@ class MainWindow(QMainWindow):
         self._empty_label.setVisible(False)
         main_layout.addWidget(self._empty_label)
 
+        # Keyboard controls info bar
+        controls_text = (
+            "\u2190\u2192 Navigate  |  \u2191\u2193 Zoom  |  "
+            "PgUp/PgDn Groups  |  Home/End First/Last  |  "
+            "F Fit  |  M Metadata  |  Ctrl+O Open  |  Ctrl+Q Quit"
+        )
+        self._controls_bar = QLabel(controls_text)
+        self._controls_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._controls_bar.setStyleSheet(
+            "background-color: #252525; color: #888; font-size: 9pt; padding: 3px 8px;"
+        )
+        main_layout.addWidget(self._controls_bar)
+
     def _init_keyboard(self):
         KeyboardHandler(self, {
             "prev_image": self._prev_image,
