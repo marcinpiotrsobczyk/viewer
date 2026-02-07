@@ -6,1271 +6,1355 @@
 <title>Image Viewer</title>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1e1e1e; color: #d0d0d0; font-size: 14px; }
+html, body { height: 100%; overflow: hidden; background: #1e1e1e; color: #d0d0d0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; }
 
+/* Layout */
 #app { display: flex; flex-direction: column; height: 100vh; }
+#topBar { display: flex; align-items: center; padding: 4px 10px; background: #2d2d2d;
+  border-bottom: 1px solid #444; min-height: 34px; gap: 8px; flex-shrink: 0; }
+#mainArea { display: flex; flex: 1; min-height: 0; }
+#controlsBar { display: flex; align-items: center; justify-content: center; padding: 3px 10px;
+  background: #252525; border-top: 1px solid #333; font-size: 9pt; color: #888; flex-shrink: 0; }
+#statusBar { display: flex; align-items: center; padding: 3px 10px; background: #2d2d2d;
+  border-top: 1px solid #444; font-size: 11px; color: #888; flex-shrink: 0; min-height: 24px; }
 
-/* Top bar */
-#top-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #2d2d2d; border-bottom: 1px solid #444; flex-shrink: 0; min-height: 38px; }
-#top-bar button { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 13px; }
-#top-bar button:hover { background: #4a4a4a; }
-.sep { color: #666; user-select: none; }
-#dir-label { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
-#file-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#position-label { margin-left: auto; white-space: nowrap; color: #aaa; font-size: 13px; }
+/* Top Bar */
+#btnOpen { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 4px 12px;
+  border-radius: 3px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+#btnOpen:hover { background: #4a4a4a; }
+.topSep { width: 1px; height: 18px; background: #555; flex-shrink: 0; }
+#topDirName { font-weight: bold; max-width: 300px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+#topFileName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#topPosition { margin-left: auto; white-space: nowrap; color: #888; flex-shrink: 0; }
 
-/* Main content area */
-#content { display: flex; flex: 1; overflow: hidden; position: relative; }
+/* Dir Tree Panel */
+#dirTreePanel { width: 220px; min-width: 120px; max-width: 500px; background: #2d2d2d;
+  border-right: 1px solid #444; overflow-y: auto; flex-shrink: 0; display: none; }
+#dirTreePanel.visible { display: block; }
+.dirEntry { padding: 4px 8px 4px 12px; cursor: pointer; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-size: 12px; border-left: 3px solid transparent; }
+.dirEntry:hover { background: #353535; }
+.dirEntry.active { border-left-color: #2a82da; color: #fff; background: #353535; }
+.dirCount { color: #888; margin-left: 4px; }
 
-/* Directory tree panel (left) */
-#dir-panel { width: 220px; background: #2d2d2d; overflow-y: auto; flex-shrink: 0; border-right: 1px solid #444; display: none; }
-#dir-panel .dir-entry { padding: 5px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #bbb; border-left: 3px solid transparent; }
-#dir-panel .dir-entry:hover { background: #3a3a3a; }
-#dir-panel .dir-entry.active { background: #333; color: #fff; border-left-color: #2a82da; }
-#dir-panel .dir-count { color: #777; font-size: 11px; margin-left: 4px; }
+/* Splitters */
+.splitter { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; }
+.splitter:hover, .splitter.dragging { background: #2a82da; }
+#leftSplitter { display: none; }
+#dirTreePanel.visible ~ #leftSplitter { display: block; }
 
-/* Left splitter */
-.panel-splitter { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; display: none; }
-.panel-splitter:hover { background: #2a82da; }
-
-/* Image viewport */
-#viewport { flex: 1; overflow: hidden; position: relative; background: #000; cursor: grab; }
+/* Viewport */
+#viewport { flex: 1; position: relative; background: #000; overflow: hidden; cursor: grab;
+  min-width: 100px; }
 #viewport.dragging { cursor: grabbing; }
-#viewport img { position: absolute; transform-origin: 0 0; image-rendering: auto; user-select: none; -webkit-user-drag: none; }
+#viewportImg { position: absolute; top: 0; left: 0; transform-origin: 0 0; user-select: none;
+  -webkit-user-drag: none; image-rendering: auto; }
+#emptyState { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #888; font-size: 15px; text-align: center; padding: 20px; pointer-events: none; }
+#zoomIndicator { position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.7);
+  color: #ccc; padding: 4px 10px; border-radius: 4px; font-size: 12px; opacity: 0;
+  transition: opacity 0.3s; pointer-events: none; }
+#zoomIndicator.show { opacity: 1; }
 
-/* Right splitter */
-#splitter { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; }
-#splitter:hover { background: #2a82da; }
+/* Metadata Panel */
+#rightSplitter { display: none; }
+#metaPanel { width: 300px; min-width: 150px; max-width: 600px; background: #2d2d2d;
+  border-left: 1px solid #444; overflow-y: auto; flex-shrink: 0; display: none; padding: 10px; }
+#metaPanel.visible { display: block; }
+#metaPanel.visible ~ #rightSplitter { display: block; }
+.metaPanel-visible #rightSplitter { display: block; }
 
-/* Metadata panel */
-#metadata-panel { width: 300px; background: #2d2d2d; overflow-y: auto; flex-shrink: 0; padding: 10px; border-left: 1px solid #444; }
-#metadata-panel.hidden { display: none; }
-#metadata-panel h3 { font-size: 13pt; margin-bottom: 6px; color: #e0e0e0; }
-#desc-text { font-size: 11pt; padding: 4px; color: #ddd; margin-bottom: 10px; word-wrap: break-word; }
-#desc-text.empty { color: #888; }
-.meta-separator { border: none; border-top: 1px solid #555; margin: 8px 0; }
-#file-info { font-size: 10pt; color: #bbb; padding: 4px; line-height: 1.6; margin-bottom: 8px; }
-#toggle-meta-btn { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; margin-bottom: 8px; width: 100%; }
-#toggle-meta-btn:hover { background: #4a4a4a; }
-#meta-table-wrap { display: none; max-height: 400px; overflow-y: auto; }
-#meta-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-#meta-table th { text-align: left; background: #333; padding: 4px 6px; position: sticky; top: 0; }
-#meta-table td { padding: 3px 6px; border-bottom: 1px solid #3a3a3a; word-break: break-all; }
-#meta-table tr:nth-child(even) { background: #2a2a2a; }
+#descHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+#descHeader h3 { font-size: 13px; font-weight: 600; }
+#btnEditDesc { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 2px 10px;
+  border-radius: 3px; cursor: pointer; font-size: 11px; }
+#btnEditDesc:hover:not(.disabled) { background: #4a4a4a; }
+#btnEditDesc.disabled { color: #666; background: #333; border-color: #444; cursor: default; }
+#descText { font-size: 12px; color: #d0d0d0; white-space: pre-wrap; word-break: break-word;
+  margin-bottom: 10px; min-height: 20px; }
+#descText.empty { color: #666; font-style: italic; }
+.metaSep { border: none; border-top: 1px solid #444; margin: 8px 0; }
+#fileInfo { font-size: 11px; color: #aaa; line-height: 1.6; margin-bottom: 8px; }
+#btnShowAllMeta { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 3px 10px;
+  border-radius: 3px; cursor: pointer; font-size: 11px; margin-bottom: 8px; width: 100%; }
+#btnShowAllMeta:hover { background: #4a4a4a; }
+#tagsTable { width: 100%; border-collapse: collapse; font-size: 11px; display: none; }
+#tagsTable.visible { display: table; }
+#tagsTable th { position: sticky; top: 0; background: #2d2d2d; text-align: left; padding: 4px 6px;
+  border-bottom: 1px solid #555; font-weight: 600; }
+#tagsTable td { padding: 3px 6px; vertical-align: top; word-break: break-all; }
+#tagsTable tr:nth-child(even) td { background: #333; }
+#tagsTable tr:nth-child(odd) td { background: #2d2d2d; }
+#tagsTable td:first-child { white-space: nowrap; color: #aaa; width: 140px; }
 
-/* Empty state */
-#empty-msg { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #888; font-size: 14pt; line-height: 1.8; }
-
-/* Controls bar */
-#controls-bar { text-align: center; background: #252525; color: #888; font-size: 9pt; padding: 3px 8px; flex-shrink: 0; border-top: 1px solid #333; }
-
-/* Status bar */
-#status-bar { background: #252525; color: #999; font-size: 11px; padding: 2px 10px; flex-shrink: 0; border-top: 1px solid #333; }
+/* Modal */
+#modalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none;
+  align-items: center; justify-content: center; z-index: 1000; }
+#modalOverlay.open { display: flex; }
+#modalBox { background: #2d2d2d; border: 1px solid #555; border-radius: 6px; padding: 16px;
+  width: 450px; max-width: 90vw; }
+#modalBox h3 { margin-bottom: 10px; font-size: 14px; }
+#modalTextarea { width: 100%; height: 120px; background: #1e1e1e; color: #d0d0d0; border: 1px solid #555;
+  border-radius: 3px; padding: 8px; font-family: inherit; font-size: 13px; resize: vertical; }
+#modalBtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+#modalBtns button { padding: 5px 16px; border-radius: 3px; cursor: pointer; font-size: 12px;
+  border: 1px solid #555; }
+#btnModalCancel { background: #3a3a3a; color: #d0d0d0; }
+#btnModalCancel:hover { background: #4a4a4a; }
+#btnModalSave { background: #2a82da; color: #fff; border-color: #2a82da; }
+#btnModalSave:hover { background: #3590e8; }
 
 /* Hidden file input */
-#folder-input { display: none; }
-
-/* Zoom indicator */
-#zoom-indicator { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #ccc; padding: 3px 8px; border-radius: 3px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
-#zoom-indicator.visible { opacity: 1; }
-
-/* Edit button */
-#desc-header { display: flex; align-items: center; justify-content: space-between; }
-#desc-header h3 { margin: 0; }
-#edit-desc-btn { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 2px 10px; border-radius: 3px; cursor: pointer; font-size: 11px; }
-#edit-desc-btn:hover:not(:disabled) { background: #4a4a4a; }
-#edit-desc-btn:disabled { opacity: 0.4; cursor: default; background: #333; color: #666; border-color: #444; }
-
-/* Modal overlay */
-.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
-.modal-overlay.open { display: flex; }
-.modal { background: #2d2d2d; border: 1px solid #555; border-radius: 6px; padding: 16px; width: 440px; max-width: 90vw; }
-.modal h3 { margin-bottom: 10px; color: #e0e0e0; }
-.modal textarea { width: 100%; height: 120px; background: #1e1e1e; color: #d0d0d0; border: 1px solid #555; border-radius: 3px; padding: 8px; font-family: inherit; font-size: 13px; resize: vertical; }
-.modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-.modal-buttons button { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 5px 16px; border-radius: 3px; cursor: pointer; font-size: 13px; }
-.modal-buttons button:hover { background: #4a4a4a; }
-.modal-buttons button.primary { background: #2a6db5; border-color: #2a82da; }
-.modal-buttons button.primary:hover { background: #3580cc; }
+#folderInput { display: none; }
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="top-bar">
-    <button id="open-btn">Open Folder</button>
-    <span class="sep">|</span>
-    <span id="dir-label"></span>
-    <span class="sep" id="sep2" style="display:none">|</span>
-    <span id="file-label"></span>
-    <span id="position-label"></span>
+  <div id="topBar">
+    <button id="btnOpen">Open Folder</button>
+    <div class="topSep"></div>
+    <span id="topDirName"></span>
+    <div class="topSep" id="topSep2" style="display:none"></div>
+    <span id="topFileName"></span>
+    <span id="topPosition"></span>
   </div>
-
-  <div id="content">
-    <div id="dir-panel"></div>
-    <div class="panel-splitter" id="left-splitter"></div>
+  <div id="mainArea">
+    <div id="dirTreePanel"></div>
+    <div class="splitter" id="leftSplitter"></div>
     <div id="viewport">
-      <img id="image" alt="">
-      <div id="zoom-indicator"></div>
-      <div id="empty-msg">No images found.<br>Use Ctrl+O or the Open Folder button to open a folder.</div>
+      <img id="viewportImg" style="display:none" draggable="false">
+      <div id="emptyState">No images loaded.<br>Use <b>Ctrl+O</b> or the <b>Open Folder</b> button to open a folder.</div>
+      <div id="zoomIndicator"></div>
     </div>
-    <div id="splitter"></div>
-    <div id="metadata-panel">
-      <div id="desc-header"><h3>Description</h3><button id="edit-desc-btn" disabled>Edit</button></div>
-      <div id="desc-text" class="empty">(No description)</div>
-      <hr class="meta-separator">
-      <div id="file-info"></div>
-      <button id="toggle-meta-btn">Show All Metadata</button>
-      <div id="meta-table-wrap">
-        <table id="meta-table">
-          <thead><tr><th>Tag</th><th>Value</th></tr></thead>
-          <tbody id="meta-table-body"></tbody>
-        </table>
-      </div>
+    <div class="splitter" id="rightSplitter"></div>
+    <div id="metaPanel">
+      <div id="descHeader"><h3>Description</h3><button id="btnEditDesc" class="disabled" title="No write access">Edit</button></div>
+      <div id="descText" class="empty">(No description)</div>
+      <hr class="metaSep">
+      <div id="fileInfo"></div>
+      <button id="btnShowAllMeta">Show All Metadata</button>
+      <table id="tagsTable"><thead><tr><th>Tag</th><th>Value</th></tr></thead><tbody id="tagsBody"></tbody></table>
     </div>
   </div>
-
-  <div id="controls-bar">
-    &#x2190;&#x2192; Navigate &nbsp;|&nbsp; &#x2191;&#x2193; / Scroll Zoom &nbsp;|&nbsp;
-    PgUp/PgDn Directory &nbsp;|&nbsp; Home/End First/Last &nbsp;|&nbsp;
-    F Fit &nbsp;|&nbsp; M Metadata &nbsp;|&nbsp; Ctrl+O Open
-  </div>
-  <div id="status-bar">Ready — Ctrl+O to open a folder</div>
+  <div id="controlsBar">&larr; &rarr; Navigate &nbsp;|&nbsp; Up/Down / Scroll Zoom &nbsp;|&nbsp; PgUp/PgDn Directory &nbsp;|&nbsp; Home/End First/Last &nbsp;|&nbsp; F Fit &nbsp;|&nbsp; M Metadata &nbsp;|&nbsp; Ctrl+O Open</div>
+  <div id="statusBar"><span id="statusText">Ready</span></div>
 </div>
 
-<div class="modal-overlay" id="edit-modal">
-  <div class="modal">
+<div id="modalOverlay">
+  <div id="modalBox">
     <h3>Edit Description</h3>
-    <textarea id="edit-textarea"></textarea>
-    <div class="modal-buttons">
-      <button id="edit-cancel">Cancel</button>
-      <button id="edit-save" class="primary">Save</button>
+    <textarea id="modalTextarea"></textarea>
+    <div id="modalBtns">
+      <button id="btnModalCancel">Cancel</button>
+      <button id="btnModalSave">Save</button>
     </div>
   </div>
 </div>
 
-<input type="file" id="folder-input" webkitdirectory multiple>
+<input type="file" id="folderInput" webkitdirectory multiple>
 
 <script>
+(function(){
 "use strict";
 
-const SUPPORTED_EXT = new Set([".jpg",".jpeg",".png",".gif",".bmp",".webp",".tiff",".tif",".svg",".avif"]);
-const ZOOM_FACTOR = 1.25;
-const ZOOM_MIN = 0.02;
-const ZOOM_MAX = 40;
+// --- Refs ---
+const $btnOpen = document.getElementById('btnOpen');
+const $folderInput = document.getElementById('folderInput');
+const $topDirName = document.getElementById('topDirName');
+const $topSep2 = document.getElementById('topSep2');
+const $topFileName = document.getElementById('topFileName');
+const $topPosition = document.getElementById('topPosition');
+const $dirTreePanel = document.getElementById('dirTreePanel');
+const $leftSplitter = document.getElementById('leftSplitter');
+const $viewport = document.getElementById('viewport');
+const $img = document.getElementById('viewportImg');
+const $emptyState = document.getElementById('emptyState');
+const $zoomInd = document.getElementById('zoomIndicator');
+const $rightSplitter = document.getElementById('rightSplitter');
+const $metaPanel = document.getElementById('metaPanel');
+const $btnEditDesc = document.getElementById('btnEditDesc');
+const $descText = document.getElementById('descText');
+const $fileInfo = document.getElementById('fileInfo');
+const $btnShowAllMeta = document.getElementById('btnShowAllMeta');
+const $tagsTable = document.getElementById('tagsTable');
+const $tagsBody = document.getElementById('tagsBody');
+const $modalOverlay = document.getElementById('modalOverlay');
+const $modalTextarea = document.getElementById('modalTextarea');
+const $btnModalCancel = document.getElementById('btnModalCancel');
+const $btnModalSave = document.getElementById('btnModalSave');
+const $statusText = document.getElementById('statusText');
 
 // --- State ---
-let groups = [];       // [{dir, images: [{file, name, relPath}]}]
-let flat = [];         // [{file, name, dir, groupIdx}]
-let groupBounds = [];  // start index of each group
-let currentIndex = -1;
-let currentZoom = 1;
-let fitMode = true;
-let imgNaturalW = 0, imgNaturalH = 0;
-let panX = 0, panY = 0;
+const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','bmp','webp','tiff','tif','svg','avif']);
+let groups = [];       // [{dir, images:[{handle/file, name, dir, groupIdx}]}]
+let flat = [];         // flattened image entries
+let groupBounds = [];  // starting flat index of each group
+let currentIdx = -1;
+let rootDirName = '';
+let useFSAPI = false;  // true if opened via showDirectoryPicker
+let zoom = 1, panX = 0, panY = 0;
+let naturalW = 0, naturalH = 0;
+let isFitMode = true;
+let modalOpen = false;
 let metaVisible = true;
-let allMetaShown = false;
-let zoomTimeout = null;
-let objectUrls = new Map();
-let hasWriteAccess = false; // true when opened via File System Access API
-let currentDescription = "";
+let allMetaVisible = false;
+let currentMeta = null; // {tags, description}
+let currentDescription = '';
+const urlCache = new Map();
+let zoomTimer = null;
 
-// --- DOM ---
-const $ = id => document.getElementById(id);
-const viewport = $("viewport");
-const img = $("image");
-const dirLabel = $("dir-label");
-const fileLabel = $("file-label");
-const sep2 = $("sep2");
-const posLabel = $("position-label");
-const statusBar = $("status-bar");
-const emptyMsg = $("empty-msg");
-const metaPanel = $("metadata-panel");
-const descText = $("desc-text");
-const fileInfo = $("file-info");
-const metaTableBody = $("meta-table-body");
-const metaTableWrap = $("meta-table-wrap");
-const toggleMetaBtn = $("toggle-meta-btn");
-const zoomInd = $("zoom-indicator");
-const folderInput = $("folder-input");
-const splitter = $("splitter");
-const editBtn = $("edit-desc-btn");
-const editModal = $("edit-modal");
-const editTextarea = $("edit-textarea");
-const dirPanel = $("dir-panel");
-const leftSplitter = $("left-splitter");
-
-// --- Folder loading ---
-const hasFSAccess = typeof window.showDirectoryPicker === "function";
-
-$("open-btn").addEventListener("click", () => {
-  if (hasFSAccess) { openFolderFSAccess(); } else { folderInput.click(); }
-});
-folderInput.addEventListener("change", onFolderSelected);
-
-async function openFolderFSAccess() {
-  let dirHandle;
-  try { dirHandle = await window.showDirectoryPicker(); } catch (_) { return; }
-  cleanup();
-  statusBar.textContent = "Scanning...";
-  hasWriteAccess = true;
-
-  const groupsMap = new Map();
-  await scanDir(dirHandle, dirHandle.name, groupsMap);
-  buildFlatList(groupsMap);
+// --- Helpers ---
+function setStatus(msg) { $statusText.textContent = msg; }
+function fileExt(name) { const i = name.lastIndexOf('.'); return i >= 0 ? name.slice(i+1).toLowerCase() : ''; }
+function isImage(name) { return IMAGE_EXTS.has(fileExt(name)); }
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(2) + ' MB';
 }
 
-async function scanDir(dirHandle, relPath, groupsMap) {
-  for await (const entry of dirHandle.values()) {
-    if (entry.kind === "file") {
-      const ext = entry.name.lastIndexOf(".") >= 0 ? entry.name.substring(entry.name.lastIndexOf(".")).toLowerCase() : "";
-      if (!SUPPORTED_EXT.has(ext)) continue;
-      if (!groupsMap.has(relPath)) groupsMap.set(relPath, []);
-      groupsMap.get(relPath).push({ handle: entry, name: entry.name });
-    } else if (entry.kind === "directory") {
-      await scanDir(entry, relPath + "/" + entry.name, groupsMap);
-    }
+// --- CRC32 ---
+const crcTable = new Uint32Array(256);
+(function(){
+  for (let n=0; n<256; n++) {
+    let c = n;
+    for (let k=0; k<8; k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+    crcTable[n] = c;
   }
+})();
+function crc32(buf, start, len) {
+  let c = 0xFFFFFFFF;
+  for (let i=start; i<start+len; i++) c = crcTable[(c^buf[i])&0xFF] ^ (c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
 }
 
-function onFolderSelected(e) {
-  const files = Array.from(e.target.files);
-  if (!files.length) return;
-  cleanup();
-  hasWriteAccess = false;
-  statusBar.textContent = "Scanning...";
-
-  const groupsMap = new Map();
-  for (const file of files) {
-    const ext = file.name.lastIndexOf(".") >= 0 ? file.name.substring(file.name.lastIndexOf(".")).toLowerCase() : "";
-    if (!SUPPORTED_EXT.has(ext)) continue;
-    const path = file.webkitRelativePath || file.name;
-    const parts = path.split("/");
-    const dir = parts.length > 2 ? parts.slice(1, -1).join("/") : parts[0];
-    if (!groupsMap.has(dir)) groupsMap.set(dir, []);
-    groupsMap.get(dir).push({ file, name: file.name });
-  }
-  buildFlatList(groupsMap);
-  folderInput.value = "";
-}
-
-function cleanup() {
-  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
-  objectUrls.clear();
-}
-
-function buildFlatList(groupsMap) {
-  const sortedDirs = Array.from(groupsMap.keys()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  groups = []; flat = []; groupBounds = [];
-
-  for (const dir of sortedDirs) {
-    const images = groupsMap.get(dir).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-    const groupIdx = groups.length;
-    groups.push({ dir, images });
-    groupBounds.push(flat.length);
-    for (const item of images) {
-      flat.push({ ...item, dir, groupIdx });
-    }
-  }
-
-  if (flat.length === 0) {
-    currentIndex = -1;
-    showEmpty(true);
-    dirPanel.style.display = "none";
-    leftSplitter.style.display = "none";
-    statusBar.textContent = "No images found in folder";
-    return;
-  }
-  showEmpty(false);
-  renderDirTree();
-  navigateTo(0);
-  statusBar.textContent = `Found ${flat.length} images in ${groups.length} directories`;
-}
-
-function showEmpty(show) {
-  emptyMsg.style.display = show ? "block" : "none";
-  img.style.display = show ? "none" : "block";
-}
-
-// --- Directory tree ---
-function renderDirTree() {
-  dirPanel.innerHTML = "";
-  dirPanel.style.display = "block";
-  leftSplitter.style.display = "block";
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i];
-    const el = document.createElement("div");
-    el.className = "dir-entry";
-    el.dataset.groupIdx = i;
-    const count = g.images.length;
-    el.innerHTML = escHtml(g.dir) + `<span class="dir-count">(${count})</span>`;
-    el.title = g.dir;
-    el.addEventListener("click", () => navigateTo(groupBounds[i]));
-    dirPanel.appendChild(el);
-  }
-}
-
-function highlightDirEntry(groupIdx) {
-  const entries = dirPanel.querySelectorAll(".dir-entry");
-  for (const e of entries) {
-    e.classList.toggle("active", parseInt(e.dataset.groupIdx) === groupIdx);
-  }
-  // Scroll active entry into view
-  const active = dirPanel.querySelector(".dir-entry.active");
-  if (active) active.scrollIntoView({ block: "nearest" });
-}
-
-// --- Left splitter resize ---
-let leftSplitting = false, leftSplitStartX = 0, leftSplitStartW = 0;
-leftSplitter.addEventListener("mousedown", e => {
-  leftSplitting = true;
-  leftSplitStartX = e.clientX;
-  leftSplitStartW = dirPanel.offsetWidth;
-  e.preventDefault();
-});
-window.addEventListener("mousemove", e => {
-  if (!leftSplitting) return;
-  const delta = e.clientX - leftSplitStartX;
-  const newW = Math.max(120, Math.min(500, leftSplitStartW + delta));
-  dirPanel.style.width = newW + "px";
-  if (fitMode && imgNaturalW) fitInView();
-});
-window.addEventListener("mouseup", () => { leftSplitting = false; });
-
-// --- Navigation ---
-function navigateTo(index) {
-  if (index < 0 || index >= flat.length) return;
-  currentIndex = index;
-  const entry = flat[index];
-
-  // Update top bar
-  dirLabel.textContent = entry.dir;
-  fileLabel.textContent = entry.name;
-  sep2.style.display = "inline";
-
-  const gi = entry.groupIdx;
-  const groupStart = groupBounds[gi];
-  const groupSize = gi + 1 < groupBounds.length ? groupBounds[gi + 1] - groupStart : flat.length - groupStart;
-  const posInGroup = index - groupStart;
-  posLabel.textContent = `${posInGroup + 1}/${groupSize} in dir  |  ${index + 1}/${flat.length} total`;
-
-  // Highlight active directory in tree
-  highlightDirEntry(gi);
-
-  // Load image
-  loadImage(entry);
-
-  // Load metadata
-  loadMetadata(entry);
-}
-
-async function getFile(entry) {
-  if (entry.file) return entry.file;
-  if (entry.handle) return await entry.handle.getFile();
+// --- Object URL Management ---
+function getObjectURL(entry) {
+  if (urlCache.has(entry)) return urlCache.get(entry);
   return null;
 }
-
-async function loadImage(entry) {
-  statusBar.textContent = "Loading...";
-  const file = await getFile(entry);
-  if (!file) { statusBar.textContent = "Error: cannot read file"; return; }
-
-  // Revoke old URL for this entry if file changed (e.g. after edit)
-  const key = entry.handle || entry.file;
-  let url = objectUrls.get(key);
-  if (url) URL.revokeObjectURL(url);
-  url = URL.createObjectURL(file);
-  objectUrls.set(key, url);
-
-  const tempImg = new Image();
-  tempImg.onload = () => {
-    imgNaturalW = tempImg.naturalWidth;
-    imgNaturalH = tempImg.naturalHeight;
-    img.src = url;
-    img.style.display = "block";
-    fitMode = true;
-    fitInView();
-    statusBar.textContent = "Ready";
-  };
-  tempImg.onerror = () => {
-    img.src = "";
-    img.style.display = "none";
-    statusBar.textContent = `Error loading: ${entry.name}`;
-  };
-  tempImg.src = url;
-}
-
-// --- Zoom & Pan ---
-function fitInView() {
-  if (!imgNaturalW || !imgNaturalH) return;
-  const vw = viewport.clientWidth;
-  const vh = viewport.clientHeight;
-  const scaleX = vw / imgNaturalW;
-  const scaleY = vh / imgNaturalH;
-  currentZoom = Math.min(scaleX, scaleY);
-  const displayW = imgNaturalW * currentZoom;
-  const displayH = imgNaturalH * currentZoom;
-  panX = (vw - displayW) / 2;
-  panY = (vh - displayH) / 2;
-  applyTransform();
-  fitMode = true;
-  showZoom();
-}
-
-function applyTransform() {
-  img.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom})`;
-  img.style.width = imgNaturalW + "px";
-  img.style.height = imgNaturalH + "px";
-}
-
-function zoomAt(factor, cx, cy) {
-  const newZoom = currentZoom * factor;
-  if (newZoom < ZOOM_MIN || newZoom > ZOOM_MAX) return;
-
-  // Zoom toward the point (cx, cy) in viewport coords
-  const imgX = (cx - panX) / currentZoom;
-  const imgY = (cy - panY) / currentZoom;
-
-  currentZoom = newZoom;
-  panX = cx - imgX * currentZoom;
-  panY = cy - imgY * currentZoom;
-  fitMode = false;
-  applyTransform();
-  showZoom();
-}
-
-function zoomCenter(factor) {
-  const cx = viewport.clientWidth / 2;
-  const cy = viewport.clientHeight / 2;
-  zoomAt(factor, cx, cy);
-}
-
-function showZoom() {
-  zoomInd.textContent = `${(currentZoom * 100).toFixed(0)}%`;
-  zoomInd.classList.add("visible");
-  clearTimeout(zoomTimeout);
-  zoomTimeout = setTimeout(() => zoomInd.classList.remove("visible"), 1200);
-}
-
-// Mouse wheel zoom
-viewport.addEventListener("wheel", e => {
-  e.preventDefault();
-  if (!imgNaturalW) return;
-  const factor = e.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
-  const rect = viewport.getBoundingClientRect();
-  zoomAt(factor, e.clientX - rect.left, e.clientY - rect.top);
-}, { passive: false });
-
-// Pan with mouse drag
-let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
-viewport.addEventListener("mousedown", e => {
-  if (e.button !== 0) return;
-  dragging = true;
-  dragStartX = e.clientX;
-  dragStartY = e.clientY;
-  panStartX = panX;
-  panStartY = panY;
-  viewport.classList.add("dragging");
-  e.preventDefault();
-});
-window.addEventListener("mousemove", e => {
-  if (!dragging) return;
-  panX = panStartX + (e.clientX - dragStartX);
-  panY = panStartY + (e.clientY - dragStartY);
-  applyTransform();
-});
-window.addEventListener("mouseup", () => {
-  dragging = false;
-  viewport.classList.remove("dragging");
-});
-
-// Resize → re-fit
-window.addEventListener("resize", () => {
-  if (fitMode && imgNaturalW) fitInView();
-});
-
-// --- Splitter resize ---
-let splitting = false, splitStartX = 0, splitStartW = 0;
-splitter.addEventListener("mousedown", e => {
-  splitting = true;
-  splitStartX = e.clientX;
-  splitStartW = metaPanel.offsetWidth;
-  e.preventDefault();
-});
-window.addEventListener("mousemove", e => {
-  if (!splitting) return;
-  const delta = splitStartX - e.clientX;
-  const newW = Math.max(150, Math.min(600, splitStartW + delta));
-  metaPanel.style.width = newW + "px";
-  if (fitMode && imgNaturalW) fitInView();
-});
-window.addEventListener("mouseup", () => { splitting = false; });
-
-// --- Metadata ---
-const WRITABLE_EXT = new Set([".jpg",".jpeg",".png",".tiff",".tif",".webp"]);
-
-async function loadMetadata(entry) {
-  const file = await getFile(entry);
-  if (!file) return;
-  const tags = {};
-
-  const sizeStr = file.size < 1024 ? `${file.size} B`
-    : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB`
-    : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-  const ext = entry.name.lastIndexOf(".") >= 0 ? entry.name.substring(entry.name.lastIndexOf(".") + 1).toUpperCase() : "Unknown";
-  const extLower = "." + ext.toLowerCase();
-
-  const fileInfoLines = [`File Size: ${sizeStr}`, `Format: ${ext}`];
-  if (imgNaturalW && imgNaturalH) fileInfoLines.push(`Dimensions: ${imgNaturalW} × ${imgNaturalH}`);
-  if (file.lastModified) fileInfoLines.push(`Modified: ${new Date(file.lastModified).toLocaleString()}`);
-  tags["File Size"] = sizeStr;
-  tags["Format"] = ext;
-  if (imgNaturalW && imgNaturalH) tags["Dimensions"] = `${imgNaturalW} × ${imgNaturalH}`;
-  fileInfo.innerHTML = fileInfoLines.map(l => escHtml(l)).join("<br>");
-
-  let description = null;
-  try {
-    const exifData = await readExif(file);
-    if (exifData) {
-      for (const [k, v] of Object.entries(exifData.tags)) tags[k] = v;
-      description = exifData.description;
-    }
-  } catch (_) {}
-
-  currentDescription = description || "";
-  if (description) {
-    descText.textContent = description;
-    descText.classList.remove("empty");
+async function createObjectURL(entry) {
+  revokeObjectURL(entry);
+  let file;
+  if (entry.handle) {
+    file = await entry.handle.getFile();
   } else {
-    descText.textContent = "(No description)";
-    descText.classList.add("empty");
+    file = entry.file;
   }
-
-  // Enable edit button only with write access and writable format
-  const canWrite = hasWriteAccess && entry.handle && WRITABLE_EXT.has(extLower);
-  editBtn.disabled = !canWrite;
-  editBtn.title = canWrite ? "Edit description" :
-    !hasWriteAccess ? "No write permission — use Chrome/Edge and Open Folder to enable editing" :
-    "Description editing not supported for this format";
-
-  metaTableBody.innerHTML = "";
-  for (const key of Object.keys(tags).sort()) {
-    const tr = document.createElement("tr");
-    const td1 = document.createElement("td"); td1.textContent = key;
-    const td2 = document.createElement("td"); td2.textContent = tags[key];
-    tr.appendChild(td1); tr.appendChild(td2);
-    metaTableBody.appendChild(tr);
+  const url = URL.createObjectURL(file);
+  urlCache.set(entry, url);
+  return url;
+}
+function revokeObjectURL(entry) {
+  if (urlCache.has(entry)) {
+    URL.revokeObjectURL(urlCache.get(entry));
+    urlCache.delete(entry);
   }
+}
+function revokeAllURLs() {
+  for (const url of urlCache.values()) URL.revokeObjectURL(url);
+  urlCache.clear();
+}
+
+// --- Folder Opening ---
+$btnOpen.addEventListener('click', openFolder);
+
+async function openFolder() {
+  if (window.showDirectoryPicker) {
+    try {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      useFSAPI = true;
+      rootDirName = dirHandle.name;
+      setStatus('Scanning...');
+      const entries = [];
+      await scanDir(dirHandle, '', entries);
+      buildGroups(entries);
+    } catch(e) {
+      if (e.name !== 'AbortError') setStatus('Error: ' + e.message);
+      return;
+    }
+  } else {
+    $folderInput.click();
+    return;
+  }
+}
+
+$folderInput.addEventListener('change', function() {
+  const files = Array.from(this.files);
+  if (!files.length) return;
+  useFSAPI = false;
+  const parts = (files[0].webkitRelativePath || '').split('/');
+  rootDirName = parts[0] || 'Folder';
+  setStatus('Scanning...');
+  const entries = [];
+  for (const f of files) {
+    if (!isImage(f.name)) continue;
+    const rel = f.webkitRelativePath || f.name;
+    const segs = rel.split('/');
+    const dir = segs.length > 2 ? segs.slice(1, segs.length-1).join('/') : '.';
+    entries.push({ file: f, name: f.name, dir });
+  }
+  buildGroups(entries);
+  this.value = '';
+});
+
+async function scanDir(dirHandle, path, entries) {
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind === 'file' && isImage(entry.name)) {
+      entries.push({ handle: entry, name: entry.name, dir: path || '.' });
+    } else if (entry.kind === 'directory') {
+      await scanDir(entry, path ? path + '/' + entry.name : entry.name, entries);
+    }
+  }
+}
+
+function buildGroups(entries) {
+  revokeAllURLs();
+  const map = new Map();
+  for (const e of entries) {
+    if (!map.has(e.dir)) map.set(e.dir, []);
+    map.get(e.dir).push(e);
+  }
+  const dirs = Array.from(map.keys()).sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  groups = [];
+  flat = [];
+  groupBounds = [];
+  for (const d of dirs) {
+    const imgs = map.get(d).sort((a,b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    const gIdx = groups.length;
+    groupBounds.push(flat.length);
+    for (const img of imgs) { img.groupIdx = gIdx; flat.push(img); }
+    groups.push({ dir: d, images: imgs });
+  }
+  buildDirTree();
+  if (flat.length > 0) {
+    setStatus('Found ' + flat.length + ' images in ' + groups.length + ' directories.');
+    navigate(0);
+  } else {
+    currentIdx = -1;
+    $img.style.display = 'none';
+    $emptyState.style.display = 'flex';
+    $emptyState.innerHTML = 'No images found.<br>Use <b>Ctrl+O</b> or the <b>Open Folder</b> button to open a folder.';
+    setStatus('No images found.');
+    updateTopBar();
+  }
+}
+
+// --- Directory Tree ---
+function buildDirTree() {
+  $dirTreePanel.innerHTML = '';
+  for (let i=0; i<groups.length; i++) {
+    const div = document.createElement('div');
+    div.className = 'dirEntry';
+    div.dataset.groupIdx = i;
+    const label = groups[i].dir === '.' ? rootDirName : groups[i].dir;
+    div.innerHTML = '<span class="dirLabel">' + escHtml(label) + '</span><span class="dirCount">(' + groups[i].images.length + ')</span>';
+    div.addEventListener('click', () => navigate(groupBounds[i]));
+    $dirTreePanel.appendChild(div);
+  }
+  $dirTreePanel.classList.add('visible');
+}
+
+function updateDirTreeActive(gIdx) {
+  const entries = $dirTreePanel.querySelectorAll('.dirEntry');
+  entries.forEach(e => e.classList.toggle('active', +e.dataset.groupIdx === gIdx));
+  const active = $dirTreePanel.querySelector('.dirEntry.active');
+  if (active) active.scrollIntoView({ block: 'nearest' });
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// --- Minimal EXIF reader ---
-const EXIF_TAGS = {
-  0x010E: "ImageDescription", 0x010F: "Make", 0x0110: "Model",
-  0x0112: "Orientation", 0x011A: "XResolution", 0x011B: "YResolution",
-  0x0128: "ResolutionUnit", 0x0131: "Software", 0x0132: "DateTime",
-  0x013B: "Artist", 0x8298: "Copyright", 0x8769: "ExifIFD", 0x8825: "GPSIFD",
-  // ExifIFD tags
-  0x829A: "ExposureTime", 0x829D: "FNumber", 0x8822: "ExposureProgram",
-  0x8827: "ISOSpeedRatings", 0x9000: "ExifVersion", 0x9003: "DateTimeOriginal",
-  0x9004: "DateTimeDigitized", 0x9201: "ShutterSpeedValue", 0x9202: "ApertureValue",
-  0x9204: "ExposureBiasValue", 0x9207: "MeteringMode", 0x9209: "Flash",
-  0x920A: "FocalLength", 0x9286: "UserComment", 0xA001: "ColorSpace",
-  0xA002: "PixelXDimension", 0xA003: "PixelYDimension", 0xA405: "FocalLengthIn35mmFilm",
-  0xA406: "SceneCaptureType", 0xA430: "CameraOwnerName", 0xA431: "BodySerialNumber",
-  0xA432: "LensInfo", 0xA433: "LensMake", 0xA434: "LensModel",
+// --- Navigation ---
+async function navigate(idx) {
+  if (idx < 0 || idx >= flat.length) return;
+  currentIdx = idx;
+  const entry = flat[idx];
+  setStatus('Loading...');
+  $emptyState.style.display = 'none';
+
+  try {
+    const url = await createObjectURL(entry);
+    $img.onload = function() {
+      naturalW = $img.naturalWidth;
+      naturalH = $img.naturalHeight;
+      $img.style.width = naturalW + 'px';
+      $img.style.height = naturalH + 'px';
+      $img.style.display = 'block';
+      fitToView();
+      setStatus('Zoom: ' + Math.round(zoom * 100) + '%');
+    };
+    $img.src = url;
+  } catch(e) {
+    setStatus('Error loading image: ' + e.message);
+  }
+
+  updateTopBar();
+  updateDirTreeActive(entry.groupIdx);
+  loadMetadata(entry);
+}
+
+function updateTopBar() {
+  $topDirName.textContent = rootDirName;
+  if (currentIdx >= 0 && flat[currentIdx]) {
+    const entry = flat[currentIdx];
+    $topSep2.style.display = '';
+    $topFileName.textContent = entry.name;
+    const gIdx = entry.groupIdx;
+    const posInDir = currentIdx - groupBounds[gIdx] + 1;
+    const dirTotal = groups[gIdx].images.length;
+    $topPosition.textContent = posInDir + '/' + dirTotal + ' in dir  |  ' + (currentIdx+1) + '/' + flat.length + ' total';
+  } else {
+    $topSep2.style.display = 'none';
+    $topFileName.textContent = '';
+    $topPosition.textContent = '';
+  }
+}
+
+// --- Image Display ---
+function fitToView() {
+  if (!naturalW || !naturalH) return;
+  const vw = $viewport.clientWidth, vh = $viewport.clientHeight;
+  zoom = Math.min(vw / naturalW, vh / naturalH);
+  panX = (vw - naturalW * zoom) / 2;
+  panY = (vh - naturalH * zoom) / 2;
+  isFitMode = true;
+  applyTransform();
+}
+
+function applyTransform() {
+  $img.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+}
+
+function showZoomIndicator() {
+  $zoomInd.textContent = Math.round(zoom * 100) + '%';
+  $zoomInd.classList.add('show');
+  clearTimeout(zoomTimer);
+  zoomTimer = setTimeout(() => $zoomInd.classList.remove('show'), 1200);
+}
+
+function zoomAt(cx, cy, factor) {
+  const newZoom = Math.min(40, Math.max(0.02, zoom * factor));
+  const r = newZoom / zoom;
+  panX = cx - (cx - panX) * r;
+  panY = cy - (cy - panY) * r;
+  zoom = newZoom;
+  isFitMode = false;
+  applyTransform();
+  showZoomIndicator();
+  setStatus('Zoom: ' + Math.round(zoom * 100) + '%');
+}
+
+// Mouse drag
+let dragging = false, dragStartX, dragStartY, panStartX, panStartY;
+
+$viewport.addEventListener('mousedown', e => {
+  if (e.button !== 0 || currentIdx < 0) return;
+  dragging = true;
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  panStartX = panX; panStartY = panY;
+  $viewport.classList.add('dragging');
+  e.preventDefault();
+});
+
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  panX = panStartX + (e.clientX - dragStartX);
+  panY = panStartY + (e.clientY - dragStartY);
+  isFitMode = false;
+  applyTransform();
+});
+
+window.addEventListener('mouseup', () => {
+  if (dragging) { dragging = false; $viewport.classList.remove('dragging'); }
+});
+
+// Mouse wheel zoom
+$viewport.addEventListener('wheel', e => {
+  if (currentIdx < 0) return;
+  e.preventDefault();
+  const rect = $viewport.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  const factor = e.deltaY < 0 ? 1.25 : 1/1.25;
+  zoomAt(cx, cy, factor);
+}, { passive: false });
+
+// Double-click fit
+$viewport.addEventListener('dblclick', () => {
+  if (currentIdx >= 0) fitToView();
+});
+
+// Resize
+window.addEventListener('resize', () => { if (isFitMode && currentIdx >= 0) fitToView(); });
+
+// --- Metadata ---
+const EXIF_TAG_NAMES = {
+  0x010E:'ImageDescription',0x010F:'Make',0x0110:'Model',0x0112:'Orientation',
+  0x011A:'XResolution',0x011B:'YResolution',0x0128:'ResolutionUnit',0x0131:'Software',
+  0x0132:'DateTime',0x013B:'Artist',0x8298:'Copyright',0x8769:'ExifIFD',0x8825:'GPSIFD',
+  0x829A:'ExposureTime',0x829D:'FNumber',0x8827:'ISOSpeedRatings',0x9000:'ExifVersion',
+  0x9003:'DateTimeOriginal',0x9004:'DateTimeDigitized',0x9286:'UserComment',0x920A:'FocalLength',
+  0xA002:'PixelXDimension',0xA003:'PixelYDimension',0xA433:'LensMake',0xA434:'LensModel',
+  0xA405:'FocalLengthIn35mmFilm',0xA406:'SceneCaptureType',0x0100:'ImageWidth',0x0101:'ImageLength',
+  0x0102:'BitsPerSample',0x0103:'Compression',0x0106:'PhotometricInterpretation',
+  0x9201:'ShutterSpeedValue',0x9202:'ApertureValue',0x9203:'BrightnessValue',
+  0x9204:'ExposureBiasValue',0x9205:'MaxApertureValue',0x9207:'MeteringMode',
+  0x9208:'LightSource',0x9209:'Flash',0xA001:'ColorSpace',0xA210:'FocalPlaneResolutionUnit',
+  0xA401:'CustomRendered',0xA402:'ExposureMode',0xA403:'WhiteBalance',0xA404:'DigitalZoomRatio',
 };
 
-async function readExif(file) {
-  const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+function readU16(dv, off, le) { return dv.getUint16(off, le); }
+function readU32(dv, off, le) { return dv.getUint32(off, le); }
+function readS32(dv, off, le) { return dv.getInt32(off, le); }
 
-  if (ext === ".png") return readPngTextChunks(file);
-  if (ext !== ".jpg" && ext !== ".jpeg" && ext !== ".tiff" && ext !== ".tif" && ext !== ".webp") return null;
-
-  const buf = await file.slice(0, Math.min(file.size, 256 * 1024)).arrayBuffer();
-  const view = new DataView(buf);
-
-  // Find EXIF APP1 marker in JPEG
-  let offset = 0;
-  let littleEndian = false;
-
-  if (view.getUint16(0) === 0xFFD8) {
-    // JPEG
-    offset = 2;
-    while (offset < view.byteLength - 4) {
-      const marker = view.getUint16(offset);
-      if (marker === 0xFFE1) {
-        // APP1
-        const len = view.getUint16(offset + 2);
-        // Check for "Exif\0\0"
-        if (view.getUint32(offset + 4) === 0x45786966 && view.getUint16(offset + 8) === 0x0000) {
-          return parseExifTiff(buf, offset + 10);
-        }
-        // Check for XMP
-        const xmpSig = "http://ns.adobe.com/xap/1.0/\0";
-        let isXmp = true;
-        for (let i = 0; i < xmpSig.length && i + offset + 4 < view.byteLength; i++) {
-          if (view.getUint8(offset + 4 + i) !== xmpSig.charCodeAt(i)) { isXmp = false; break; }
-        }
-        if (isXmp) {
-          const xmpStr = new TextDecoder().decode(new Uint8Array(buf, offset + 4 + xmpSig.length, len - 2 - xmpSig.length));
-          const xmpDesc = extractXmpDescription(xmpStr);
-          if (xmpDesc) return { description: xmpDesc, tags: { "XMP Description": xmpDesc } };
-        }
-        offset += 2 + len;
-      } else if ((marker & 0xFF00) === 0xFF00) {
-        if (marker === 0xFFDA) break; // Start of scan
-        offset += 2 + view.getUint16(offset + 2);
-      } else {
-        break;
-      }
-    }
-    return null;
+function readAscii(dv, off, count) {
+  let s = '';
+  for (let i=0; i<count; i++) {
+    const c = dv.getUint8(off+i);
+    if (c === 0) break;
+    s += String.fromCharCode(c);
   }
-
-  // TIFF
-  if ((view.getUint16(0) === 0x4949 || view.getUint16(0) === 0x4D4D) && view.byteLength > 8) {
-    return parseExifTiff(buf, 0);
-  }
-
-  // WebP - look for EXIF chunk
-  if (view.getUint32(0) === 0x52494646 && view.getUint32(8) === 0x57454250) {
-    let off = 12;
-    while (off < view.byteLength - 8) {
-      const tag = String.fromCharCode(view.getUint8(off), view.getUint8(off+1), view.getUint8(off+2), view.getUint8(off+3));
-      const chunkLen = view.getUint32(off + 4, true);
-      if (tag === "EXIF") {
-        return parseExifTiff(buf, off + 8);
-      }
-      off += 8 + chunkLen + (chunkLen % 2);
-    }
-  }
-
-  return null;
+  return s;
 }
 
-function parseExifTiff(buf, tiffStart) {
-  const view = new DataView(buf);
-  if (tiffStart + 8 > buf.byteLength) return null;
+function readIFDValue(dv, type, count, valueOff, tiffStart, le) {
+  const off = tiffStart + valueOff;
+  switch(type) {
+    case 1: // BYTE
+      if (count === 1) return dv.getUint8(off);
+      { let a=[]; for(let i=0;i<count;i++) a.push(dv.getUint8(off+i)); return a.join(', '); }
+    case 2: // ASCII
+      return readAscii(dv, off, count);
+    case 3: // SHORT
+      if (count === 1) return readU16(dv, off, le);
+      { let a=[]; for(let i=0;i<count;i++) a.push(readU16(dv,off+i*2,le)); return a.join(', '); }
+    case 4: // LONG
+      if (count === 1) return readU32(dv, off, le);
+      { let a=[]; for(let i=0;i<count;i++) a.push(readU32(dv,off+i*4,le)); return a.join(', '); }
+    case 5: // RATIONAL
+      { let a=[]; for(let i=0;i<count;i++){
+        const n=readU32(dv,off+i*8,le), d=readU32(dv,off+i*8+4,le);
+        a.push(d?n/d:0);
+      } return count===1?a[0]:a.join(', '); }
+    case 7: // UNDEFINED
+      { let a=[]; for(let i=0;i<Math.min(count,64);i++) a.push(dv.getUint8(off+i)); return a; }
+    case 9: // SLONG
+      if (count === 1) return readS32(dv, off, le);
+      { let a=[]; for(let i=0;i<count;i++) a.push(readS32(dv,off+i*4,le)); return a.join(', '); }
+    case 10: // SRATIONAL
+      { let a=[]; for(let i=0;i<count;i++){
+        const n=readS32(dv,off+i*8,le), d=readS32(dv,off+i*8+4,le);
+        a.push(d?n/d:0);
+      } return count===1?a[0]:a.join(', '); }
+    default: return '(type '+type+')';
+  }
+}
 
-  const byteOrder = view.getUint16(tiffStart);
-  const le = byteOrder === 0x4949;
-  const magic = view.getUint16(tiffStart + 2, le);
-  if (magic !== 0x002A) return null;
-
-  const ifd0Offset = view.getUint32(tiffStart + 4, le);
+function parseIFD(dv, ifdOff, tiffStart, le) {
   const tags = {};
-  let description = null;
-
-  function readIfd(offset) {
-    const abs = tiffStart + offset;
-    if (abs + 2 > buf.byteLength) return {};
-    const count = view.getUint16(abs, le);
-    const result = {};
-    for (let i = 0; i < count; i++) {
-      const entryOff = abs + 2 + i * 12;
-      if (entryOff + 12 > buf.byteLength) break;
-      const tagId = view.getUint16(entryOff, le);
-      const type = view.getUint16(entryOff + 2, le);
-      const numValues = view.getUint32(entryOff + 4, le);
-      const valueOffset = entryOff + 8;
-
-      const tagName = EXIF_TAGS[tagId] || `Tag 0x${tagId.toString(16).toUpperCase().padStart(4, "0")}`;
-      const val = readTagValue(view, type, numValues, valueOffset, tiffStart, le, buf);
-      if (val !== undefined) result[tagName] = val;
+  const count = readU16(dv, tiffStart + ifdOff, le);
+  for (let i=0; i<count; i++) {
+    const entryOff = tiffStart + ifdOff + 2 + i*12;
+    if (entryOff + 12 > dv.byteLength) break;
+    const tag = readU16(dv, entryOff, le);
+    const type = readU16(dv, entryOff+2, le);
+    const cnt = readU32(dv, entryOff+4, le);
+    const typeSizes = {1:1,2:1,3:2,4:4,5:8,7:1,9:4,10:8};
+    const sz = (typeSizes[type]||1)*cnt;
+    let valueOff;
+    if (sz <= 4) {
+      // value is inline
+      valueOff = entryOff - tiffStart + 8;
+      // For inline values, we need to read from entryOff+8 relative to buffer start
+      // but readIFDValue expects tiffStart + valueOff, so:
+      valueOff = entryOff + 8 - tiffStart;
+    } else {
+      valueOff = readU32(dv, entryOff+8, le);
     }
-    return result;
-  }
-
-  const ifd0 = readIfd(ifd0Offset);
-  Object.assign(tags, ifd0);
-
-  if (ifd0["ImageDescription"]) description = ifd0["ImageDescription"];
-
-  // Read ExifIFD
-  if (ifd0["ExifIFD"]) {
-    const exifOffset = parseInt(ifd0["ExifIFD"]);
-    if (!isNaN(exifOffset)) {
-      const exifTags = readIfd(exifOffset);
-      delete tags["ExifIFD"];
-      for (const [k, v] of Object.entries(exifTags)) {
-        if (k !== "ExifIFD" && k !== "GPSIFD") tags[k] = v;
-      }
-      // UserComment for description fallback
-      if (!description && exifTags["UserComment"]) {
-        description = decodeUserComment(exifTags["UserComment"]);
-      }
+    try {
+      tags[tag] = readIFDValue(dv, type, cnt, valueOff, tiffStart, le);
+    } catch(e) {
+      // skip unreadable tag
     }
   }
-
-  return { description, tags };
-}
-
-function readTagValue(view, type, count, valueOffset, tiffStart, le, buf) {
-  // type: 1=BYTE, 2=ASCII, 3=SHORT, 4=LONG, 5=RATIONAL, 7=UNDEFINED, 10=SRATIONAL
-  const typeSize = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8, 12: 8 };
-  const size = (typeSize[type] || 1) * count;
-  let dataOff = valueOffset;
-  if (size > 4) {
-    dataOff = tiffStart + view.getUint32(valueOffset, le);
-  }
-  if (dataOff + size > buf.byteLength) return undefined;
-
-  if (type === 2) { // ASCII
-    const bytes = new Uint8Array(buf, dataOff, count);
-    let s = "";
-    for (let i = 0; i < bytes.length; i++) {
-      if (bytes[i] === 0) break;
-      s += String.fromCharCode(bytes[i]);
-    }
-    return s;
-  }
-  if (type === 3 && count === 1) return view.getUint16(dataOff, le);
-  if (type === 4 && count === 1) return view.getUint32(dataOff, le);
-  if ((type === 3 || type === 4) && count === 1) {
-    return type === 3 ? view.getUint16(dataOff, le) : view.getUint32(dataOff, le);
-  }
-  if (type === 5 && count === 1) {
-    const num = view.getUint32(dataOff, le);
-    const den = view.getUint32(dataOff + 4, le);
-    return den ? `${num}/${den}` : `${num}`;
-  }
-  if (type === 10 && count === 1) {
-    const num = view.getInt32(dataOff, le);
-    const den = view.getInt32(dataOff + 4, le);
-    return den ? `${num}/${den}` : `${num}`;
-  }
-  if (type === 7) { // UNDEFINED - return as hex or raw for UserComment
-    return new Uint8Array(buf, dataOff, count);
-  }
-  if (type === 1 && count <= 8) {
-    const vals = [];
-    for (let i = 0; i < count; i++) vals.push(view.getUint8(dataOff + i));
-    return vals.join(", ");
-  }
-  // For multi-value SHORT/LONG
-  if ((type === 3 || type === 4) && count <= 16) {
-    const vals = [];
-    for (let i = 0; i < count; i++) {
-      vals.push(type === 3 ? view.getUint16(dataOff + i * 2, le) : view.getUint32(dataOff + i * 4, le));
-    }
-    return vals.join(", ");
-  }
-  if (type === 5 && count <= 8) {
-    const vals = [];
-    for (let i = 0; i < count; i++) {
-      const n = view.getUint32(dataOff + i * 8, le);
-      const d = view.getUint32(dataOff + i * 8 + 4, le);
-      vals.push(d ? `${n}/${d}` : `${n}`);
-    }
-    return vals.join(", ");
-  }
-  return `(${count} values)`;
+  return tags;
 }
 
 function decodeUserComment(raw) {
-  if (typeof raw === "string") return raw;
-  if (!(raw instanceof Uint8Array) || raw.length <= 8) return null;
-  const prefix = raw.slice(0, 8);
+  if (!Array.isArray(raw) || raw.length < 8) return null;
+  const prefix = raw.slice(0,8);
   const payload = raw.slice(8);
-  // ASCII
-  const prefStr = String.fromCharCode(...prefix);
-  if (prefStr.startsWith("ASCII\0")) {
-    return new TextDecoder("ascii").decode(payload).replace(/\0/g, "").trim();
+  const isAscii = prefix[0]===0x41 && prefix[1]===0x53 && prefix[2]===0x43 && prefix[3]===0x49 && prefix[4]===0x49;
+  const isUnicode = prefix[0]===0x55 && prefix[1]===0x4E && prefix[2]===0x49 && prefix[3]===0x43 && prefix[4]===0x4F && prefix[5]===0x44 && prefix[6]===0x45;
+  if (isAscii) {
+    return payload.map(b => b?String.fromCharCode(b):'').join('').trim();
   }
-  // UNICODE
-  if (prefStr.startsWith("UNICODE\0")) {
-    try { return new TextDecoder("utf-16le").decode(payload).replace(/\0/g, "").trim(); } catch (_) {}
-    try { return new TextDecoder("utf-16be").decode(payload).replace(/\0/g, "").trim(); } catch (_) {}
+  if (isUnicode) {
+    const u16 = new Uint16Array(new Uint8Array(payload).buffer);
+    return String.fromCharCode(...u16).replace(/\0/g,'').trim();
   }
-  try { return new TextDecoder("utf-8").decode(payload).replace(/\0/g, "").trim(); } catch (_) {}
-  return null;
+  // Unknown encoding, try as ASCII
+  return payload.filter(b=>b>=32&&b<127).map(b=>String.fromCharCode(b)).join('').trim() || null;
 }
 
-function extractXmpDescription(xmpStr) {
-  // Simple regex extraction of dc:description
-  const match = xmpStr.match(/<dc:description[\s\S]*?<rdf:li[^>]*>([^<]+)<\/rdf:li>/);
-  if (match) return match[1].trim();
-  // Try attribute form
-  const attrMatch = xmpStr.match(/dc:description="([^"]+)"/);
-  if (attrMatch) return attrMatch[1].trim();
-  return null;
+function parseExifFromTiff(dv, tiffStart) {
+  if (tiffStart + 8 > dv.byteLength) return {};
+  const bo = readU16(dv, tiffStart, false);
+  const le = (bo === 0x4949);
+  const magic = readU16(dv, tiffStart+2, le);
+  if (magic !== 0x002A) return {};
+  const ifd0Off = readU32(dv, tiffStart+4, le);
+  let tags = parseIFD(dv, ifd0Off, tiffStart, le);
+  // Sub-IFD (Exif)
+  if (tags[0x8769]) {
+    const exifOff = tags[0x8769];
+    const exifTags = parseIFD(dv, exifOff, tiffStart, le);
+    Object.assign(tags, exifTags);
+  }
+  // GPS IFD
+  if (tags[0x8825]) {
+    const gpsOff = tags[0x8825];
+    const gpsTags = parseIFD(dv, gpsOff, tiffStart, le);
+    for (const [k,v] of Object.entries(gpsTags)) tags['GPS_'+k] = v;
+  }
+  return tags;
 }
 
-async function readPngTextChunks(file) {
-  const buf = await file.slice(0, Math.min(file.size, 1024 * 1024)).arrayBuffer();
-  const view = new DataView(buf);
+function parseJpegExif(buf) {
+  const dv = new DataView(buf);
+  let tags = {};
+  let xmpDesc = null;
+  if (dv.getUint16(0) !== 0xFFD8) return { tags, xmpDesc };
+  let off = 2;
+  while (off < dv.byteLength - 4) {
+    const marker = dv.getUint16(off);
+    if (marker === 0xFFDA || marker === 0xFFD9) break; // SOS or EOI
+    const segLen = dv.getUint16(off+2);
+    if (marker === 0xFFE1) {
+      // Check for Exif
+      if (readAscii(dv, off+4, 4) === 'Exif' && dv.getUint8(off+8) === 0 && dv.getUint8(off+9) === 0) {
+        const tiffStart = off + 10;
+        tags = parseExifFromTiff(dv, tiffStart);
+      }
+      // Check for XMP
+      const xmpId = 'http://ns.adobe.com/xap/1.0/\0';
+      let isXmp = true;
+      for (let i=0; i<xmpId.length && isXmp; i++) {
+        if (off+4+i >= dv.byteLength || String.fromCharCode(dv.getUint8(off+4+i)) !== xmpId[i]) isXmp = false;
+      }
+      if (isXmp) {
+        const xmpStart = off + 4 + xmpId.length;
+        const xmpLen = segLen - 2 - xmpId.length;
+        const xmpBytes = new Uint8Array(buf, xmpStart, xmpLen);
+        const xmpStr = new TextDecoder().decode(xmpBytes);
+        const m = xmpStr.match(/<dc:description[\s\S]*?<rdf:li[^>]*>([^<]*)<\/rdf:li>/);
+        if (m) xmpDesc = m[1].trim();
+      }
+    }
+    off += 2 + segLen;
+  }
+  return { tags, xmpDesc };
+}
+
+function parsePngText(buf) {
+  const dv = new DataView(buf);
   const tags = {};
-  let description = null;
-
-  // Verify PNG signature
-  if (view.getUint32(0) !== 0x89504E47) return null;
-
-  let offset = 8;
-  while (offset + 12 <= buf.byteLength) {
-    const len = view.getUint32(offset);
-    const typeBytes = new Uint8Array(buf, offset + 4, 4);
-    const chunkType = String.fromCharCode(...typeBytes);
-    const dataStart = offset + 8;
-
-    if (chunkType === "tEXt" && dataStart + len <= buf.byteLength) {
+  let off = 8; // skip PNG signature
+  while (off + 8 <= dv.byteLength) {
+    const len = dv.getUint32(off);
+    const typeBytes = new Uint8Array(buf, off+4, 4);
+    const type = String.fromCharCode(...typeBytes);
+    if (type === 'IDAT' || type === 'IEND') break;
+    const dataStart = off + 8;
+    if (type === 'tEXt' && len > 0) {
       const data = new Uint8Array(buf, dataStart, len);
-      const nullIdx = data.indexOf(0);
-      if (nullIdx > 0) {
-        const key = new TextDecoder("latin1").decode(data.slice(0, nullIdx));
-        const value = new TextDecoder("latin1").decode(data.slice(nullIdx + 1));
-        tags[key] = value;
-        if (key.toLowerCase() === "description" && value.trim()) {
-          description = value.trim();
-        }
+      let nul = data.indexOf(0);
+      if (nul < 0) nul = len;
+      const key = new TextDecoder('latin1').decode(data.slice(0, nul));
+      const val = new TextDecoder('latin1').decode(data.slice(nul+1));
+      tags[key] = val;
+    }
+    if (type === 'iTXt' && len > 0) {
+      const data = new Uint8Array(buf, dataStart, len);
+      let nul = data.indexOf(0);
+      if (nul < 0) nul = len;
+      const key = new TextDecoder().decode(data.slice(0, nul));
+      // skip compression flag, method, lang, translated keyword
+      let pos = nul+1;
+      // compressionFlag, compressionMethod
+      pos += 2;
+      // lang (null-terminated)
+      let nul2 = data.indexOf(0, pos);
+      if (nul2 < 0) nul2 = len;
+      pos = nul2 + 1;
+      // translated keyword (null-terminated)
+      let nul3 = data.indexOf(0, pos);
+      if (nul3 < 0) nul3 = len;
+      pos = nul3 + 1;
+      const val = new TextDecoder().decode(data.slice(pos));
+      tags[key] = val;
+    }
+    off += 8 + len + 4; // 4 for CRC
+  }
+  return tags;
+}
+
+function parseWebpExif(buf) {
+  const dv = new DataView(buf);
+  if (readAscii(dv, 0, 4) !== 'RIFF' || readAscii(dv, 8, 4) !== 'WEBP') return {};
+  let off = 12;
+  while (off + 8 <= dv.byteLength) {
+    const chunkId = readAscii(dv, off, 4);
+    const chunkSize = dv.getUint32(off+4, true);
+    if (chunkId === 'EXIF') {
+      let tiffStart = off + 8;
+      // Some WebP files have "Exif\0\0" prefix before TIFF
+      if (tiffStart + 6 <= dv.byteLength && readAscii(dv, tiffStart, 4) === 'Exif') {
+        tiffStart += 6;
+      }
+      return parseExifFromTiff(dv, tiffStart);
+    }
+    off += 8 + chunkSize + (chunkSize & 1); // pad to even
+  }
+  return {};
+}
+
+async function readMetadata(entry) {
+  let file;
+  if (entry.handle) file = await entry.handle.getFile();
+  else file = entry.file;
+
+  const readSize = Math.min(file.size, 256 * 1024);
+  const buf = await file.slice(0, readSize).arrayBuffer();
+  const ext = fileExt(entry.name);
+  let tags = {};
+  let description = '';
+  let xmpDesc = null;
+  let pngTextTags = {};
+
+  if (ext === 'jpg' || ext === 'jpeg') {
+    const result = parseJpegExif(buf);
+    tags = result.tags;
+    xmpDesc = result.xmpDesc;
+  } else if (ext === 'png') {
+    pngTextTags = parsePngText(buf);
+    // Also check for eXIf chunk in PNG (rare but possible)
+  } else if (ext === 'webp') {
+    tags = parseWebpExif(buf);
+  } else if (ext === 'tiff' || ext === 'tif') {
+    const dv = new DataView(buf);
+    tags = parseExifFromTiff(dv, 0);
+  }
+
+  // Determine description (priority: ImageDescription > XMP > PNG text > UserComment)
+  if (tags[0x010E] && typeof tags[0x010E] === 'string' && tags[0x010E].trim()) {
+    description = tags[0x010E].trim();
+  } else if (xmpDesc) {
+    description = xmpDesc;
+  } else if (pngTextTags['Description']) {
+    description = pngTextTags['Description'];
+  } else if (tags[0x9286]) {
+    const uc = decodeUserComment(tags[0x9286]);
+    if (uc) description = uc;
+  }
+
+  // Build named tags
+  const namedTags = {};
+  for (const [k,v] of Object.entries(tags)) {
+    const tagId = parseInt(k);
+    const name = EXIF_TAG_NAMES[tagId] || ('Tag_0x' + tagId.toString(16).toUpperCase().padStart(4,'0'));
+    if (tagId === 0x8769 || tagId === 0x8825) continue; // skip IFD pointers
+    let val = v;
+    if (Array.isArray(val)) {
+      if (tagId === 0x9286) {
+        val = decodeUserComment(val) || '(binary)';
+      } else {
+        val = val.length > 32 ? '(binary, ' + val.length + ' bytes)' : val.join(', ');
       }
     }
-
-    if (chunkType === "iTXt" && dataStart + len <= buf.byteLength) {
-      const data = new Uint8Array(buf, dataStart, len);
-      const nullIdx = data.indexOf(0);
-      if (nullIdx > 0) {
-        const key = new TextDecoder("utf-8").decode(data.slice(0, nullIdx));
-        // iTXt: keyword \0 compression_flag \0 compression_method \0 language \0 translated_keyword \0 text
-        let rest = nullIdx + 1;
-        // Skip compression flag, method
-        rest += 2;
-        // Skip language tag (null terminated)
-        while (rest < data.length && data[rest] !== 0) rest++;
-        rest++;
-        // Skip translated keyword (null terminated)
-        while (rest < data.length && data[rest] !== 0) rest++;
-        rest++;
-        if (rest < data.length) {
-          const value = new TextDecoder("utf-8").decode(data.slice(rest));
-          tags[key] = value;
-          if (key.toLowerCase() === "description" && value.trim()) {
-            description = value.trim();
-          }
-        }
-      }
-    }
-
-    if (chunkType === "IDAT" || chunkType === "IEND") break;
-    offset += 12 + len;
+    if (typeof val === 'number') val = String(Math.round(val * 10000) / 10000);
+    namedTags[name] = String(val);
+  }
+  for (const [k,v] of Object.entries(pngTextTags)) {
+    namedTags['PNG:' + k] = v;
   }
 
-  return Object.keys(tags).length || description ? { description, tags } : null;
+  return {
+    tags: namedTags,
+    description,
+    fileSize: file.size,
+    lastModified: new Date(file.lastModified),
+    type: file.type || ('image/' + ext),
+  };
 }
 
-// --- Metadata toggle ---
-toggleMetaBtn.addEventListener("click", () => {
-  allMetaShown = !allMetaShown;
-  metaTableWrap.style.display = allMetaShown ? "block" : "none";
-  toggleMetaBtn.textContent = allMetaShown ? "Hide All Metadata" : "Show All Metadata";
-});
+async function loadMetadata(entry) {
+  currentMeta = null;
+  currentDescription = '';
+  $descText.textContent = '(No description)';
+  $descText.classList.add('empty');
+  $fileInfo.textContent = '';
+  $tagsBody.innerHTML = '';
+  allMetaVisible = false;
+  $tagsTable.classList.remove('visible');
+  $btnShowAllMeta.textContent = 'Show All Metadata';
 
-// --- Group navigation helpers ---
-function groupIndexFor(flatIndex) {
-  if (!groupBounds.length) return 0;
-  let lo = 0, hi = groupBounds.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (groupBounds[mid] <= flatIndex) lo = mid; else hi = mid - 1;
-  }
-  return lo;
-}
+  updateEditButton(entry);
 
-function firstOfNextGroup(flatIndex) {
-  const gi = groupIndexFor(flatIndex);
-  return gi + 1 < groupBounds.length ? groupBounds[gi + 1] : null;
-}
-
-function firstOfPrevGroup(flatIndex) {
-  const gi = groupIndexFor(flatIndex);
-  return gi > 0 ? groupBounds[gi - 1] : null;
-}
-
-// --- Keyboard shortcuts ---
-document.addEventListener("keydown", e => {
-  if (editModal.classList.contains("open")) {
-    if (e.key === "Escape") editModal.classList.remove("open");
-    return;
-  }
-  // Ctrl+O
-  if ((e.ctrlKey || e.metaKey) && e.key === "o") {
-    e.preventDefault();
-    if (hasFSAccess) { openFolderFSAccess(); } else { folderInput.click(); }
-    return;
-  }
-
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-  switch (e.key) {
-    case "ArrowLeft":
-      e.preventDefault();
-      if (currentIndex > 0) navigateTo(currentIndex - 1);
-      break;
-    case "ArrowRight":
-      e.preventDefault();
-      if (currentIndex < flat.length - 1) navigateTo(currentIndex + 1);
-      break;
-    case "ArrowUp":
-      e.preventDefault();
-      zoomCenter(ZOOM_FACTOR);
-      break;
-    case "ArrowDown":
-      e.preventDefault();
-      zoomCenter(1 / ZOOM_FACTOR);
-      break;
-    case "PageUp":
-      e.preventDefault();
-      if (currentIndex >= 0) {
-        const target = firstOfPrevGroup(currentIndex);
-        if (target !== null) navigateTo(target);
-      }
-      break;
-    case "PageDown":
-      e.preventDefault();
-      if (currentIndex >= 0) {
-        const target = firstOfNextGroup(currentIndex);
-        if (target !== null) navigateTo(target);
-      }
-      break;
-    case "Home":
-      e.preventDefault();
-      if (flat.length > 0) navigateTo(0);
-      break;
-    case "End":
-      e.preventDefault();
-      if (flat.length > 0) navigateTo(flat.length - 1);
-      break;
-    case "f": case "F":
-      e.preventDefault();
-      fitMode = true;
-      fitInView();
-      break;
-    case "m": case "M":
-      e.preventDefault();
-      metaVisible = !metaVisible;
-      metaPanel.classList.toggle("hidden", !metaVisible);
-      splitter.style.display = metaVisible ? "" : "none";
-      if (fitMode && imgNaturalW) fitInView();
-      break;
-  }
-});
-
-// Double-click to fit
-viewport.addEventListener("dblclick", () => {
-  fitMode = true;
-  fitInView();
-});
-
-// --- Edit Description ---
-editBtn.addEventListener("click", () => {
-  editTextarea.value = currentDescription;
-  editModal.classList.add("open");
-  editTextarea.focus();
-});
-$("edit-cancel").addEventListener("click", () => editModal.classList.remove("open"));
-editModal.addEventListener("click", e => { if (e.target === editModal) editModal.classList.remove("open"); });
-$("edit-save").addEventListener("click", async () => {
-  const newText = editTextarea.value;
-  editModal.classList.remove("open");
-  const entry = flat[currentIndex];
-  if (!entry || !entry.handle) return;
   try {
-    await writeDescription(entry.handle, newText);
-    statusBar.textContent = "Description saved";
+    const meta = await readMetadata(entry);
+    currentMeta = meta;
+    currentDescription = meta.description;
+
+    if (meta.description) {
+      $descText.textContent = meta.description;
+      $descText.classList.remove('empty');
+    } else {
+      $descText.textContent = '(No description)';
+      $descText.classList.add('empty');
+    }
+
+    // File info
+    const lines = [];
+    lines.push('Size: ' + formatSize(meta.fileSize));
+    lines.push('Format: ' + meta.type);
+    if (naturalW && naturalH) lines.push('Dimensions: ' + naturalW + ' x ' + naturalH);
+    lines.push('Modified: ' + meta.lastModified.toLocaleString());
+    $fileInfo.textContent = lines.join('\n');
+
+    // Tags
+    const sorted = Object.entries(meta.tags).sort((a,b) => a[0].localeCompare(b[0]));
+    $tagsBody.innerHTML = '';
+    for (const [k,v] of sorted) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + escHtml(k) + '</td><td>' + escHtml(String(v)) + '</td>';
+      $tagsBody.appendChild(tr);
+    }
+    $btnShowAllMeta.textContent = 'Show All Metadata (' + sorted.length + ' tags)';
+  } catch(e) {
+    $fileInfo.textContent = 'Error reading metadata: ' + e.message;
+  }
+}
+
+function updateEditButton(entry) {
+  const ext = fileExt(entry.name);
+  const writable = useFSAPI && (ext === 'jpg' || ext === 'jpeg' || ext === 'png');
+  if (writable) {
+    $btnEditDesc.classList.remove('disabled');
+    $btnEditDesc.title = 'Edit description';
+  } else {
+    $btnEditDesc.classList.add('disabled');
+    if (!useFSAPI) {
+      $btnEditDesc.title = 'Editing requires File System Access API (use Chrome/Edge with Open Folder button)';
+    } else {
+      $btnEditDesc.title = 'Description editing not supported for this format';
+    }
+  }
+}
+
+$btnShowAllMeta.addEventListener('click', () => {
+  allMetaVisible = !allMetaVisible;
+  $tagsTable.classList.toggle('visible', allMetaVisible);
+  $btnShowAllMeta.textContent = (allMetaVisible ? 'Hide' : 'Show') + ' All Metadata' +
+    ($tagsBody.children.length ? ' (' + $tagsBody.children.length + ' tags)' : '');
+});
+
+// --- Description Editing ---
+$btnEditDesc.addEventListener('click', () => {
+  if ($btnEditDesc.classList.contains('disabled')) return;
+  openEditModal();
+});
+
+function openEditModal() {
+  modalOpen = true;
+  $modalTextarea.value = currentDescription;
+  $modalOverlay.classList.add('open');
+  $modalTextarea.focus();
+}
+
+function closeEditModal() {
+  modalOpen = false;
+  $modalOverlay.classList.remove('open');
+}
+
+$btnModalCancel.addEventListener('click', closeEditModal);
+
+$btnModalSave.addEventListener('click', async () => {
+  const newDesc = $modalTextarea.value;
+  const entry = flat[currentIdx];
+  if (!entry || !entry.handle) return;
+  const ext = fileExt(entry.name);
+  setStatus('Saving description...');
+  closeEditModal();
+
+  try {
+    if (ext === 'jpg' || ext === 'jpeg') {
+      await writeJpegDescription(entry.handle, newDesc);
+    } else if (ext === 'png') {
+      await writePngDescription(entry.handle, newDesc);
+    }
+    currentDescription = newDesc;
+    if (newDesc) {
+      $descText.textContent = newDesc;
+      $descText.classList.remove('empty');
+    } else {
+      $descText.textContent = '(No description)';
+      $descText.classList.add('empty');
+    }
+    // Refresh object URL since file changed
+    revokeObjectURL(entry);
+    const url = await createObjectURL(entry);
+    $img.src = url;
+    setStatus('Description saved.');
+    // Reload metadata
     loadMetadata(entry);
-  } catch (e) {
-    statusBar.textContent = `Error saving: ${e.message}`;
+  } catch(e) {
+    setStatus('Error saving: ' + e.message);
   }
 });
 
-async function writeDescription(fileHandle, description) {
+// --- JPEG Description Writer ---
+async function writeJpegDescription(fileHandle, desc) {
   const file = await fileHandle.getFile();
   const buf = await file.arrayBuffer();
-  const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
-  let newBuf;
-  if (ext === ".png") {
-    newBuf = writePngDescription(buf, description);
-  } else if (ext === ".jpg" || ext === ".jpeg") {
-    newBuf = writeJpegDescription(buf, description);
-  } else {
-    throw new Error("Unsupported format for description editing");
+  const data = new Uint8Array(buf);
+  const dv = new DataView(buf);
+
+  if (dv.getUint16(0) !== 0xFFD8) throw new Error('Not a JPEG');
+
+  let off = 2;
+  let app1Start = -1, app1Len = 0;
+  let isExifApp1 = false;
+
+  // Find existing EXIF APP1
+  while (off < data.length - 4) {
+    const marker = dv.getUint16(off);
+    if (marker === 0xFFDA || marker === 0xFFD9) break;
+    const segLen = dv.getUint16(off+2);
+    if (marker === 0xFFE1) {
+      if (readAscii(dv, off+4, 4) === 'Exif' && dv.getUint8(off+8) === 0 && dv.getUint8(off+9) === 0) {
+        app1Start = off;
+        app1Len = 2 + segLen;
+        isExifApp1 = true;
+        break;
+      }
+    }
+    off += 2 + segLen;
   }
+
+  let newFile;
+  if (isExifApp1) {
+    // Patch existing EXIF
+    const tiffStart = app1Start + 10;
+    const tiffData = new Uint8Array(buf, tiffStart, app1Len - 10);
+    const newTiff = patchExifDescription(tiffData, desc);
+    // Build new APP1
+    const app1Data = new Uint8Array(10 + newTiff.length);
+    app1Data[0] = 0xFF; app1Data[1] = 0xE1;
+    const newSegLen = 2 + 6 + newTiff.length;
+    app1Data[2] = (newSegLen >> 8) & 0xFF; app1Data[3] = newSegLen & 0xFF;
+    // Exif\0\0
+    app1Data[4] = 0x45; app1Data[5] = 0x78; app1Data[6] = 0x69; app1Data[7] = 0x66;
+    app1Data[8] = 0; app1Data[9] = 0;
+    app1Data.set(newTiff, 10);
+
+    // Reassemble
+    newFile = new Uint8Array(app1Start + app1Data.length + (data.length - app1Start - app1Len));
+    newFile.set(data.slice(0, app1Start));
+    newFile.set(app1Data, app1Start);
+    newFile.set(data.slice(app1Start + app1Len), app1Start + app1Data.length);
+  } else {
+    // Create minimal EXIF APP1 with description
+    const descBytes = new TextEncoder().encode(desc);
+    // Build TIFF: big-endian, single IFD0 with tag 270
+    const ifdEntryCount = 1;
+    const ifdSize = 2 + ifdEntryCount * 12 + 4; // count + entries + next IFD pointer
+    const dataOffset = 8 + ifdSize; // TIFF header(8) + IFD
+    const tiffLen = dataOffset + descBytes.length + 1; // +1 for null terminator
+    const tiff = new Uint8Array(tiffLen);
+    const tdv = new DataView(tiff.buffer);
+    // TIFF header: big-endian
+    tiff[0] = 0x4D; tiff[1] = 0x4D; // MM
+    tdv.setUint16(2, 0x002A, false);
+    tdv.setUint32(4, 8, false); // IFD0 offset
+    // IFD0
+    tdv.setUint16(8, ifdEntryCount, false);
+    // Tag 270 (ImageDescription), type ASCII(2)
+    tdv.setUint16(10, 270, false);
+    tdv.setUint16(12, 2, false); // type: ASCII
+    const strLen = descBytes.length + 1;
+    tdv.setUint32(14, strLen, false); // count
+    if (strLen <= 4) {
+      // Inline
+      for (let i=0; i<descBytes.length; i++) tiff[18+i] = descBytes[i];
+      tiff[18+descBytes.length] = 0;
+    } else {
+      tdv.setUint32(18, dataOffset, false); // offset to data
+      tiff.set(descBytes, dataOffset);
+      tiff[dataOffset + descBytes.length] = 0;
+    }
+    tdv.setUint32(22, 0, false); // next IFD: none
+
+    // Build APP1 segment
+    const app1Payload = new Uint8Array(8 + tiff.length);
+    // Exif\0\0
+    app1Payload[0] = 0x45; app1Payload[1] = 0x78; app1Payload[2] = 0x69; app1Payload[3] = 0x66;
+    app1Payload[4] = 0; app1Payload[5] = 0;
+    app1Payload.set(tiff, 6);
+
+    const segLen = 2 + app1Payload.length;
+    const app1Seg = new Uint8Array(4 + app1Payload.length);
+    app1Seg[0] = 0xFF; app1Seg[1] = 0xE1;
+    app1Seg[2] = (segLen >> 8) & 0xFF; app1Seg[3] = segLen & 0xFF;
+    app1Seg.set(app1Payload, 4);
+
+    // Insert after SOI (first 2 bytes)
+    newFile = new Uint8Array(2 + app1Seg.length + data.length - 2);
+    newFile[0] = 0xFF; newFile[1] = 0xD8;
+    newFile.set(app1Seg, 2);
+    newFile.set(data.slice(2), 2 + app1Seg.length);
+  }
+
   const writable = await fileHandle.createWritable();
-  await writable.write(newBuf);
+  await writable.write(newFile);
   await writable.close();
 }
 
-function writeJpegDescription(buf, description) {
-  const view = new DataView(buf);
-  if (view.getUint16(0) !== 0xFFD8) throw new Error("Not a JPEG");
-
-  // Build a minimal EXIF APP1 with just ImageDescription (tag 270)
-  // We'll preserve existing APP1 EXIF and patch tag 270 in, or create new APP1
-  const descBytes = new TextEncoder().encode(description);
-  // Find existing APP1 EXIF
-  let app1Start = -1, app1Len = 0;
-  let offset = 2;
-  while (offset < view.byteLength - 4) {
-    const marker = view.getUint16(offset);
-    if (marker === 0xFFE1) {
-      const len = view.getUint16(offset + 2);
-      if (offset + 4 + 6 <= view.byteLength && view.getUint32(offset + 4) === 0x45786966 && view.getUint16(offset + 8) === 0x0000) {
-        app1Start = offset;
-        app1Len = len + 2;
-      }
-      break;
-    } else if ((marker & 0xFF00) === 0xFF00) {
-      if (marker === 0xFFDA) break;
-      offset += 2 + view.getUint16(offset + 2);
-    } else { break; }
-  }
-
-  if (app1Start >= 0) {
-    // Patch existing EXIF: parse TIFF, rebuild IFD0 with new tag 270
-    const tiffStart = app1Start + 10;
-    const newExif = patchExifDescription(new Uint8Array(buf, tiffStart, app1Len - 10), descBytes);
-    // Build: Exif\0\0 + newExif
-    const app1Data = new Uint8Array(6 + newExif.length);
-    app1Data.set([0x45, 0x78, 0x69, 0x66, 0x00, 0x00]); // "Exif\0\0"
-    app1Data.set(newExif, 6);
-    const app1Size = 2 + app1Data.length; // length field includes itself
-    const before = new Uint8Array(buf, 0, app1Start);
-    const after = new Uint8Array(buf, app1Start + app1Len);
-    const result = new Uint8Array(before.length + 4 + app1Data.length + after.length);
-    result.set(before, 0);
-    let p = before.length;
-    result[p] = 0xFF; result[p+1] = 0xE1;
-    result[p+2] = (app1Size >> 8) & 0xFF; result[p+3] = app1Size & 0xFF;
-    result.set(app1Data, p + 4);
-    result.set(after, p + 4 + app1Data.length);
-    return result.buffer;
-  } else {
-    // No existing EXIF — create minimal one
-    const newExif = buildMinimalExif(descBytes);
-    const app1Data = new Uint8Array(6 + newExif.length);
-    app1Data.set([0x45, 0x78, 0x69, 0x66, 0x00, 0x00]);
-    app1Data.set(newExif, 6);
-    const app1Size = 2 + app1Data.length;
-    // Insert after SOI (first 2 bytes)
-    const result = new Uint8Array(2 + 4 + app1Data.length + buf.byteLength - 2);
-    result[0] = 0xFF; result[1] = 0xD8;
-    result[2] = 0xFF; result[3] = 0xE1;
-    result[4] = (app1Size >> 8) & 0xFF; result[5] = app1Size & 0xFF;
-    result.set(app1Data, 6);
-    result.set(new Uint8Array(buf, 2), 6 + app1Data.length);
-    return result.buffer;
-  }
-}
-
-function buildMinimalExif(descBytes) {
-  // Big-endian TIFF with one IFD entry: tag 270 (ImageDescription)
-  const count = descBytes.length + 1; // +1 for null terminator
-  const ifdEntries = 1;
-  const ifdSize = 2 + ifdEntries * 12 + 4; // count + entries + next_ifd
-  const dataOffset = 8 + ifdSize; // after TIFF header + IFD
-  const totalSize = dataOffset + count;
-  const out = new Uint8Array(totalSize);
-  const dv = new DataView(out.buffer);
-  // TIFF header: big-endian
-  out[0] = 0x4D; out[1] = 0x4D; // "MM"
-  dv.setUint16(2, 0x002A);
-  dv.setUint32(4, 8); // IFD0 offset
-  // IFD0
-  dv.setUint16(8, ifdEntries);
-  // Entry: tag=270, type=2(ASCII), count, value offset
-  dv.setUint16(10, 0x010E);
-  dv.setUint16(12, 2); // ASCII
-  dv.setUint32(14, count);
-  dv.setUint32(18, dataOffset);
-  dv.setUint32(22, 0); // next IFD = 0
-  // Data
-  out.set(descBytes, dataOffset);
-  out[dataOffset + descBytes.length] = 0; // null terminator
-  return out;
-}
-
-function patchExifDescription(tiffBytes, descBytes) {
-  // Parse the TIFF, find/replace tag 270, rebuild
+function patchExifDescription(tiffBytes, desc) {
   const buf = tiffBytes.buffer.slice(tiffBytes.byteOffset, tiffBytes.byteOffset + tiffBytes.byteLength);
-  const view = new DataView(buf);
-  const le = view.getUint16(0) === 0x4949;
-  const ifd0Off = view.getUint32(4, le);
+  const dv = new DataView(buf);
+  const bo = dv.getUint16(0, false);
+  const le = (bo === 0x4949);
+  const magic = readU16(dv, 2, le);
+  if (magic !== 0x002A) return tiffBytes; // can't parse, return as-is
 
-  if (ifd0Off + 2 > buf.byteLength) return buildMinimalExif(descBytes);
-  const entryCount = view.getUint16(ifd0Off, le);
+  const ifd0Off = readU32(dv, 4, le);
+  const entryCount = readU16(dv, ifd0Off, le);
 
-  // Collect all IFD0 entries (raw 12-byte each), their external data, and track tag 270
+  // Collect existing IFD0 entries except tag 270
   const entries = [];
-  const externalData = [];
-  let has270 = false;
-  for (let i = 0; i < entryCount; i++) {
-    const eOff = ifd0Off + 2 + i * 12;
-    if (eOff + 12 > buf.byteLength) break;
-    const tagId = view.getUint16(eOff, le);
-    const type = view.getUint16(eOff + 2, le);
-    const cnt = view.getUint32(eOff + 4, le);
-    if (tagId === 0x010E) { has270 = true; continue; } // skip old 270
-    const typeSize = { 1:1, 2:1, 3:2, 4:4, 5:8, 7:1, 9:4, 10:8, 12:8 };
-    const dataSize = (typeSize[type] || 1) * cnt;
-    let rawData = null;
-    if (dataSize > 4) {
-      const dataOff = view.getUint32(eOff + 8, le);
-      if (dataOff + dataSize <= buf.byteLength) {
-        rawData = new Uint8Array(buf, dataOff, dataSize);
+  for (let i=0; i<entryCount; i++) {
+    const eOff = ifd0Off + 2 + i*12;
+    const tag = readU16(dv, eOff, le);
+    if (tag === 270) continue; // skip old ImageDescription
+    entries.push(new Uint8Array(buf, eOff, 12));
+  }
+
+  // Next IFD pointer
+  const nextIfdOff = ifd0Off + 2 + entryCount * 12;
+  let nextIfd = 0;
+  if (nextIfdOff + 4 <= buf.byteLength) {
+    nextIfd = readU32(dv, nextIfdOff, le);
+  }
+
+  // Build new tag 270
+  const descBytes = new TextEncoder().encode(desc);
+  const strCount = descBytes.length + 1; // include null terminator
+
+  // We'll rebuild the TIFF with: header(8) + IFD0 + external data
+  const newEntryCount = entries.length + 1;
+  const ifdBodySize = 2 + newEntryCount * 12 + 4;
+  const newIfd0Off = 8;
+  let externalOff = newIfd0Off + ifdBodySize;
+
+  // Collect all external data for old entries + new description
+  const externalChunks = [];
+
+  // Clone and fix old entries
+  const newEntries = [];
+  for (const oldEntry of entries) {
+    const eDv = new DataView(oldEntry.buffer, oldEntry.byteOffset, 12);
+    const tag = readU16(eDv, 0, le);
+    const type = readU16(eDv, 2, le);
+    const cnt = readU32(eDv, 4, le);
+    const typeSizes = {1:1,2:1,3:2,4:4,5:8,7:1,9:4,10:8};
+    const sz = (typeSizes[type]||1)*cnt;
+    const entryCopy = new Uint8Array(12);
+    entryCopy.set(oldEntry);
+
+    if (sz > 4) {
+      // External data - copy from old TIFF
+      const oldValueOff = readU32(eDv, 8, le);
+      if (oldValueOff + sz <= buf.byteLength) {
+        const chunk = new Uint8Array(buf, oldValueOff, sz);
+        const newDv = new DataView(entryCopy.buffer, 0, 12);
+        if (le) newDv.setUint32(8, externalOff - 0, true); // offset from TIFF start, but TIFF starts at 0 in new buffer
+        else newDv.setUint32(8, externalOff - 0, false);
+        // Actually offset is relative to TIFF start which is byte 0 in our new TIFF
+        // In new layout: TIFF header starts at 0, IFD0 at 8, external data at externalOff
+        // But wait, offsets in TIFF are from TIFF start (byte 0), which in our layout IS byte 0
+        const chunkCopy = new Uint8Array(sz);
+        chunkCopy.set(chunk);
+        externalChunks.push({ offset: externalOff, data: chunkCopy });
+        const entryDv = new DataView(entryCopy.buffer);
+        if (le) entryDv.setUint32(8, externalOff, true);
+        else entryDv.setUint32(8, externalOff, false);
+        externalOff += sz;
+        // Align to word boundary
+        if (externalOff & 1) externalOff++;
       }
     }
-    entries.push({ tagId, type, cnt, valueBytes: new Uint8Array(buf, eOff + 8, 4), rawData });
+    newEntries.push({ tag, data: entryCopy });
   }
 
-  // Now rebuild: TIFF header + IFD0 with entries + tag 270 + external data
-  const newEntryCount = entries.length + 1; // existing (minus old 270) + new 270
-  const descCount = descBytes.length + 1;
-  const ifdStart = 8;
-  const ifdBodySize = 2 + newEntryCount * 12 + 4;
-  // External data starts after IFD
-  let extOff = ifdStart + ifdBodySize;
-
-  // Build entries sorted by tag (TIFF requires sorted tags)
-  const allEntries = [...entries, { tagId: 0x010E, type: 2, cnt: descCount, rawData: null, isDesc: true }];
-  allEntries.sort((a, b) => a.tagId - b.tagId);
-
-  // First pass: calculate total size
-  let totalExt = 0;
-  for (const e of allEntries) {
-    if (e.isDesc) { totalExt += descCount; }
-    else if (e.rawData) { totalExt += e.rawData.length; }
+  // Add new tag 270
+  const descEntry = new Uint8Array(12);
+  const descEntryDv = new DataView(descEntry.buffer);
+  if (le) {
+    descEntryDv.setUint16(0, 270, true);
+    descEntryDv.setUint16(2, 2, true); // ASCII
+    descEntryDv.setUint32(4, strCount, true);
+  } else {
+    descEntryDv.setUint16(0, 270, false);
+    descEntryDv.setUint16(2, 2, false);
+    descEntryDv.setUint32(4, strCount, false);
   }
-  const totalSize = ifdStart + ifdBodySize + totalExt;
-  const out = new Uint8Array(totalSize);
-  const outView = new DataView(out.buffer);
+  if (strCount <= 4) {
+    for (let i=0; i<descBytes.length; i++) descEntry[8+i] = descBytes[i];
+    descEntry[8+descBytes.length] = 0;
+  } else {
+    if (le) descEntryDv.setUint32(8, externalOff, true);
+    else descEntryDv.setUint32(8, externalOff, false);
+    const descData = new Uint8Array(strCount);
+    descData.set(descBytes);
+    descData[descBytes.length] = 0;
+    externalChunks.push({ offset: externalOff, data: descData });
+    externalOff += strCount;
+    if (externalOff & 1) externalOff++;
+  }
+  newEntries.push({ tag: 270, data: descEntry });
+
+  // Sort by tag ID
+  newEntries.sort((a,b) => a.tag - b.tag);
+
+  // Build new TIFF
+  const totalSize = externalOff;
+  const newTiff = new Uint8Array(totalSize);
+  const newDv = new DataView(newTiff.buffer);
 
   // TIFF header
-  if (le) { out[0] = 0x49; out[1] = 0x49; } else { out[0] = 0x4D; out[1] = 0x4D; }
-  outView.setUint16(2, 0x002A, le);
-  outView.setUint32(4, ifdStart, le);
+  if (le) { newTiff[0]=0x49; newTiff[1]=0x49; }
+  else { newTiff[0]=0x4D; newTiff[1]=0x4D; }
+  if (le) newDv.setUint16(2, 0x002A, true);
+  else newDv.setUint16(2, 0x002A, false);
+  if (le) newDv.setUint32(4, newIfd0Off, true);
+  else newDv.setUint32(4, newIfd0Off, false);
 
   // IFD0
-  outView.setUint16(ifdStart, newEntryCount, le);
-  let curExt = extOff;
-  for (let i = 0; i < allEntries.length; i++) {
-    const e = allEntries[i];
-    const off = ifdStart + 2 + i * 12;
-    outView.setUint16(off, e.tagId, le);
-    outView.setUint16(off + 2, e.type, le);
-    outView.setUint32(off + 4, e.cnt, le);
-
-    if (e.isDesc) {
-      if (descCount <= 4) {
-        const tmp = new Uint8Array(4);
-        tmp.set(descBytes); tmp[descBytes.length] = 0;
-        out.set(tmp, off + 8);
-      } else {
-        outView.setUint32(off + 8, curExt, le);
-        out.set(descBytes, curExt);
-        out[curExt + descBytes.length] = 0;
-        curExt += descCount;
-      }
-    } else if (e.rawData) {
-      outView.setUint32(off + 8, curExt, le);
-      out.set(e.rawData, curExt);
-      curExt += e.rawData.length;
-    } else {
-      out.set(e.valueBytes, off + 8);
-    }
+  if (le) newDv.setUint16(newIfd0Off, newEntryCount, true);
+  else newDv.setUint16(newIfd0Off, newEntryCount, false);
+  for (let i=0; i<newEntries.length; i++) {
+    newTiff.set(newEntries[i].data, newIfd0Off + 2 + i*12);
   }
-  outView.setUint32(ifdStart + 2 + newEntryCount * 12, 0, le); // next IFD = 0
-  return out;
+  // Next IFD pointer (0 = none)
+  const nextIfdPtrOff = newIfd0Off + 2 + newEntryCount * 12;
+  if (le) newDv.setUint32(nextIfdPtrOff, 0, true);
+  else newDv.setUint32(nextIfdPtrOff, 0, false);
+
+  // External data
+  for (const chunk of externalChunks) {
+    newTiff.set(chunk.data, chunk.offset);
+  }
+
+  return newTiff;
 }
 
-function writePngDescription(buf, description) {
-  const view = new DataView(buf);
-  if (view.getUint32(0) !== 0x89504E47) throw new Error("Not a PNG");
+// --- PNG Description Writer ---
+async function writePngDescription(fileHandle, desc) {
+  const file = await fileHandle.getFile();
+  const buf = await file.arrayBuffer();
+  const data = new Uint8Array(buf);
+  const dv = new DataView(buf);
 
-  // Collect all chunks, removing old "Description" tEXt chunks
+  // Verify PNG signature
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  for (let i=0; i<8; i++) if (data[i] !== sig[i]) throw new Error('Not a PNG');
+
+  // Parse chunks
   const chunks = [];
-  let offset = 8;
-  while (offset + 8 <= buf.byteLength) {
-    const len = view.getUint32(offset);
-    const typeBytes = new Uint8Array(buf, offset + 4, 4);
-    const chunkType = String.fromCharCode(...typeBytes);
-    const chunkTotal = 12 + len; // length(4) + type(4) + data(len) + crc(4)
-    if (offset + chunkTotal > buf.byteLength) break;
-    const chunkData = new Uint8Array(buf, offset, chunkTotal);
+  let off = 8;
+  let firstIdatIdx = -1;
+  while (off + 8 <= data.length) {
+    const len = dv.getUint32(off);
+    const typeBytes = new Uint8Array(buf, off+4, 4);
+    const type = String.fromCharCode(...typeBytes);
+    const chunkData = new Uint8Array(buf, off+8, len);
+    const crcVal = dv.getUint32(off+8+len);
 
-    // Skip existing Description tEXt
-    if (chunkType === "tEXt") {
-      const data = new Uint8Array(buf, offset + 8, len);
-      const nullIdx = data.indexOf(0);
-      if (nullIdx > 0) {
-        const key = new TextDecoder("latin1").decode(data.slice(0, nullIdx));
-        if (key.toLowerCase() === "description") { offset += chunkTotal; continue; }
-      }
+    // Skip old Description tEXt chunks
+    let skip = false;
+    if (type === 'tEXt') {
+      const nul = chunkData.indexOf(0);
+      const key = nul >= 0 ? new TextDecoder('latin1').decode(chunkData.slice(0, nul)) : '';
+      if (key === 'Description') skip = true;
     }
-    chunks.push({ type: chunkType, raw: new Uint8Array(chunkData) });
-    offset += chunkTotal;
+    if (!skip) {
+      if (type === 'IDAT' && firstIdatIdx < 0) firstIdatIdx = chunks.length;
+      chunks.push({ type, data: new Uint8Array(chunkData), crc: crcVal });
+    }
+    off += 8 + len + 4;
   }
 
-  // Build new tEXt chunk: "Description\0<text>"
-  const keyBytes = new TextEncoder().encode("Description");
-  const valBytes = new TextEncoder().encode(description);
-  const tEXtData = new Uint8Array(keyBytes.length + 1 + valBytes.length);
-  tEXtData.set(keyBytes);
-  tEXtData[keyBytes.length] = 0;
-  tEXtData.set(valBytes, keyBytes.length + 1);
-  const newChunk = buildPngChunk("tEXt", tEXtData);
+  // Build new Description tEXt chunk
+  if (desc) {
+    const keyBytes = new TextEncoder().encode('Description');
+    const valBytes = new TextEncoder().encode(desc);
+    const chunkPayload = new Uint8Array(keyBytes.length + 1 + valBytes.length);
+    chunkPayload.set(keyBytes);
+    chunkPayload[keyBytes.length] = 0;
+    chunkPayload.set(valBytes, keyBytes.length + 1);
 
-  // Insert before first IDAT
-  const idatIdx = chunks.findIndex(c => c.type === "IDAT");
-  const insertAt = idatIdx >= 0 ? idatIdx : chunks.length - 1;
+    const typeAndData = new Uint8Array(4 + chunkPayload.length);
+    typeAndData[0] = 0x74; typeAndData[1] = 0x45; typeAndData[2] = 0x58; typeAndData[3] = 0x74; // tEXt
+    typeAndData.set(chunkPayload, 4);
+    const newCrc = crc32(typeAndData, 0, typeAndData.length);
 
-  // Calculate total size
-  let totalSize = 8; // PNG signature
-  for (let i = 0; i < chunks.length; i++) {
-    if (i === insertAt) totalSize += newChunk.length;
-    totalSize += chunks[i].raw.length;
+    const insertIdx = firstIdatIdx >= 0 ? firstIdatIdx : chunks.length;
+    chunks.splice(insertIdx, 0, { type: 'tEXt', data: chunkPayload, crc: newCrc });
   }
-  if (insertAt >= chunks.length) totalSize += newChunk.length;
 
-  const result = new Uint8Array(totalSize);
-  result.set(new Uint8Array(buf, 0, 8)); // PNG signature
-  let p = 8;
-  for (let i = 0; i < chunks.length; i++) {
-    if (i === insertAt) { result.set(newChunk, p); p += newChunk.length; }
-    result.set(chunks[i].raw, p); p += chunks[i].raw.length;
+  // Reassemble PNG
+  let totalSize = 8;
+  for (const c of chunks) totalSize += 12 + c.data.length;
+  const out = new Uint8Array(totalSize);
+  out.set(sig);
+  let pos = 8;
+  for (const c of chunks) {
+    const cdv = new DataView(out.buffer, pos);
+    cdv.setUint32(0, c.data.length);
+    const tb = new TextEncoder().encode(c.type);
+    out.set(tb, pos+4);
+    out.set(c.data, pos+8);
+
+    // Recompute CRC for our new chunk; keep original CRC for unchanged chunks
+    if (c.type === 'tEXt') {
+      const crcBuf = new Uint8Array(4 + c.data.length);
+      crcBuf.set(tb);
+      crcBuf.set(c.data, 4);
+      const newCrc = crc32(crcBuf, 0, crcBuf.length);
+      cdv.setUint32(8 + c.data.length, newCrc);
+    } else {
+      cdv.setUint32(8 + c.data.length, c.crc);
+    }
+    pos += 12 + c.data.length;
   }
-  if (insertAt >= chunks.length) { result.set(newChunk, p); }
-  return result.buffer;
+
+  const writable = await fileHandle.createWritable();
+  await writable.write(out);
+  await writable.close();
 }
 
-function buildPngChunk(type, data) {
-  const chunk = new Uint8Array(12 + data.length);
-  const dv = new DataView(chunk.buffer);
-  dv.setUint32(0, data.length);
-  for (let i = 0; i < 4; i++) chunk[4 + i] = type.charCodeAt(i);
-  chunk.set(data, 8);
-  // CRC over type + data
-  const crc = crc32(chunk.subarray(4, 8 + data.length));
-  dv.setUint32(8 + data.length, crc);
-  return chunk;
+// --- Keyboard Shortcuts ---
+document.addEventListener('keydown', e => {
+  if (modalOpen) {
+    if (e.key === 'Escape') closeEditModal();
+    return;
+  }
+
+  if (e.ctrlKey && e.key === 'o') {
+    e.preventDefault();
+    openFolder();
+    return;
+  }
+
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  switch(e.key) {
+    case 'ArrowLeft':
+      e.preventDefault();
+      if (currentIdx > 0) navigate(currentIdx - 1);
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      if (currentIdx < flat.length - 1) navigate(currentIdx + 1);
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      if (currentIdx >= 0) {
+        const rect = $viewport.getBoundingClientRect();
+        zoomAt(rect.width/2, rect.height/2, 1.25);
+      }
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (currentIdx >= 0) {
+        const rect = $viewport.getBoundingClientRect();
+        zoomAt(rect.width/2, rect.height/2, 1/1.25);
+      }
+      break;
+    case 'PageUp':
+      e.preventDefault();
+      if (currentIdx >= 0) {
+        const gIdx = flat[currentIdx].groupIdx;
+        if (gIdx > 0) navigate(groupBounds[gIdx - 1]);
+      }
+      break;
+    case 'PageDown':
+      e.preventDefault();
+      if (currentIdx >= 0) {
+        const gIdx = flat[currentIdx].groupIdx;
+        if (gIdx < groups.length - 1) navigate(groupBounds[gIdx + 1]);
+      }
+      break;
+    case 'Home':
+      e.preventDefault();
+      if (flat.length > 0) navigate(0);
+      break;
+    case 'End':
+      e.preventDefault();
+      if (flat.length > 0) navigate(flat.length - 1);
+      break;
+    case 'f': case 'F':
+      if (currentIdx >= 0) fitToView();
+      break;
+    case 'm': case 'M':
+      metaVisible = !metaVisible;
+      $metaPanel.classList.toggle('visible', metaVisible);
+      $rightSplitter.style.display = metaVisible ? 'block' : 'none';
+      if (isFitMode && currentIdx >= 0) setTimeout(() => fitToView(), 0);
+      break;
+  }
+});
+
+// --- Splitters ---
+function initSplitter(splitter, panel, side, minW, maxW) {
+  let startX, startW, active = false;
+  splitter.addEventListener('mousedown', e => {
+    e.preventDefault();
+    active = true;
+    startX = e.clientX;
+    startW = panel.offsetWidth;
+    splitter.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!active) return;
+    const dx = side === 'left' ? (e.clientX - startX) : (startX - e.clientX);
+    const newW = Math.min(maxW, Math.max(minW, startW + dx));
+    panel.style.width = newW + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!active) return;
+    active = false;
+    splitter.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    if (isFitMode && currentIdx >= 0) fitToView();
+  });
 }
 
-// CRC32 for PNG
-const crcTable = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[n] = c;
-  }
-  return t;
+initSplitter($leftSplitter, $dirTreePanel, 'left', 120, 500);
+initSplitter($rightSplitter, $metaPanel, 'right', 150, 600);
+
+// --- Init ---
+$metaPanel.classList.add('visible');
+$rightSplitter.style.display = 'block';
+
 })();
-function crc32(bytes) {
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
 </script>
 </body>
 </html>
