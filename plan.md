@@ -133,7 +133,7 @@ Toggle button `#btnMode` in top bar. Keyboard shortcut: `S`.
 - Selection overlay: `pointer-events: auto`
 - Resize controls active
 
-Mode persists across image navigation; selection clears on navigate. Escape in Select mode: clear selection (if any) or switch to View mode (if no selection).
+Mode persists across image navigation; selection clears on navigate. Switching to View mode clears any active selection. Escape in Select mode: clear selection (if any) or switch to View mode (if no selection).
 
 ### 6. Selection System
 
@@ -191,6 +191,7 @@ When user clicks RESIZE:
 - Examples: "Undo (0)" when no history (disabled/grayed), "Undo (2)" after two resizes (enabled)
 - Enabled (clickable, styled like active button) when N > 0; disabled/grayed when N = 0
 - On click: pop last Blob from history → write it back to file via FSAPI → reload image → refresh metadata
+- On successful undo, show status: `Restored: filename (WxH)`
 - `Ctrl+Z` keyboard shortcut also triggers undo (when not in modal/input)
 - Undo history for a file is cleared when navigating to a different folder (new `openFolder()`)
 - Undo history persists across image navigation within the same folder
@@ -206,10 +207,11 @@ When user clicks RESIZE:
 
 ### 10. Metadata Panel (Right)
 
-Width: 300px default. Resizable via splitter (min 150px, max 600px). Toggle with M key.
+Width: 300px default. Visible by default on startup. Resizable via splitter (min 150px, max 600px). Toggle with M key.
 
 Contents:
-- **Description header row** with "Edit" button (grayed out when no write access)
+- **Read-only banner** (`#readOnlyBanner`): shown at top of panel when `useFSAPI` is false. Amber warning style. Context-aware wording: if browser lacks `showDirectoryPicker`, suggests Chrome/Edge; otherwise suggests reopening folder via Open Folder button.
+- **Description header row** with "Edit" button (grayed out when no write access). When disabled, a small muted text below the button shows the reason why editing is unavailable (format-specific only; FSAPI limitation covered by banner).
 - **Description text** - shows `(No description)` in muted color when empty
 - Horizontal separator
 - **File info**: size (B/KB/MB), format, dimensions (W x H), last modified date
@@ -232,7 +234,7 @@ Read first 256KB of file into ArrayBuffer. Support:
 
 ### 12. Description Editing
 
-**Edit button**: Enabled only when opened via File System Access API AND file is writable format (.jpg, .jpeg, .png).
+**Edit button**: Enabled only when opened via File System Access API AND file is writable format (.jpg, .jpeg, .png). When disabled due to format, visible text below the button explains the format-specific reason. FSAPI limitation is communicated via the read-only banner at the top of the metadata panel.
 
 **Modal dialog**: Dark themed overlay with textarea, Cancel and Save buttons.
 

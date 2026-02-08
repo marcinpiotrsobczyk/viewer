@@ -97,6 +97,10 @@ html, body { height: 100%; overflow: hidden; background: #1e1e1e; color: #d0d0d0
 .metaPanel-visible #rightSplitter { display: block; }
 
 #descHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+#readOnlyBanner { font-size: 11px; color: #cc9a3a; background: #2a2518; border: 1px solid #554420;
+  border-radius: 3px; padding: 6px 8px; margin-bottom: 8px; display: none; line-height: 1.4; }
+#readOnlyBanner.visible { display: block; }
+#editDisabledMsg { font-size: 10px; color: #888; margin-bottom: 4px; }
 #descHeader h3 { font-size: 13px; font-weight: 600; }
 #btnEditDesc { background: #3a3a3a; color: #d0d0d0; border: 1px solid #555; padding: 2px 10px;
   border-radius: 3px; cursor: pointer; font-size: 11px; }
@@ -190,7 +194,9 @@ html, body { height: 100%; overflow: hidden; background: #1e1e1e; color: #d0d0d0
     </div>
     <div class="splitter" id="rightSplitter"></div>
     <div id="metaPanel">
+      <div id="readOnlyBanner"></div>
       <div id="descHeader"><h3>Description</h3><button id="btnEditDesc" class="disabled" title="No write access">Edit</button></div>
+      <div id="editDisabledMsg"></div>
       <div id="descText" class="empty">(No description)</div>
       <hr class="metaSep">
       <div id="fileInfo"></div>
@@ -254,7 +260,9 @@ const $emptyState = document.getElementById('emptyState');
 const $zoomInd = document.getElementById('zoomIndicator');
 const $rightSplitter = document.getElementById('rightSplitter');
 const $metaPanel = document.getElementById('metaPanel');
+const $readOnlyBanner = document.getElementById('readOnlyBanner');
 const $btnEditDesc = document.getElementById('btnEditDesc');
+const $editDisabledMsg = document.getElementById('editDisabledMsg');
 const $descText = document.getElementById('descText');
 const $fileInfo = document.getElementById('fileInfo');
 const $btnShowAllMeta = document.getElementById('btnShowAllMeta');
@@ -434,6 +442,20 @@ async function scanDir(dirHandle, path, entries) {
   }
 }
 
+function updateReadOnlyBanner() {
+  if (useFSAPI) {
+    $readOnlyBanner.classList.remove('visible');
+    $readOnlyBanner.textContent = '';
+  } else {
+    if (!window.showDirectoryPicker) {
+      $readOnlyBanner.textContent = 'Read-only mode. Your browser does not support the File System Access API. Use Chrome or Edge to enable editing and resizing.';
+    } else {
+      $readOnlyBanner.textContent = 'Read-only mode. Reopen folder using the Open Folder button to enable editing and resizing.';
+    }
+    $readOnlyBanner.classList.add('visible');
+  }
+}
+
 function buildGroups(entries) {
   revokeAllURLs();
   const map = new Map();
@@ -456,6 +478,7 @@ function buildGroups(entries) {
     groups.push({ dir: d, images: imgs });
   }
   buildTree();
+  updateReadOnlyBanner();
   if (flat.length > 0) {
     setStatus('Found ' + flat.length + ' images in ' + groups.length + ' directories.');
     navigate(0);
@@ -751,7 +774,7 @@ function updateResizeButton() {
     if (!hasSel) {
       $btnResize.title = 'Select an area first';
     } else if (!useFSAPI) {
-      $btnResize.title = 'Requires Chrome/Edge with File System Access API';
+      $btnResize.title = 'Resizing unavailable in read-only mode';
     } else {
       $btnResize.title = 'Saving not supported for this format';
     }
@@ -773,7 +796,7 @@ function updateUndoButton() {
     $btnUndo.title = 'Undo last resize';
   } else {
     $btnUndo.classList.remove('enabled');
-    $btnUndo.title = count === 0 ? 'No undo history' : 'Requires Chrome/Edge with File System Access API';
+    $btnUndo.title = count === 0 ? 'No undo history' : 'Undo unavailable in read-only mode';
   }
 }
 
@@ -805,7 +828,7 @@ async function doUndo() {
       clearSelection();
       updateTopBar();
       updateUndoButton();
-      setStatus('Undo complete: ' + naturalW + '\u00D7' + naturalH);
+      setStatus('Restored: ' + entry.name + ' (' + naturalW + '\u00D7' + naturalH + ')');
     };
     $img.src = url;
     loadMetadata(entry);
@@ -1403,12 +1426,16 @@ function updateEditButton(entry) {
   if (writable) {
     $btnEditDesc.classList.remove('disabled');
     $btnEditDesc.title = 'Edit description';
+    $editDisabledMsg.textContent = '';
   } else {
     $btnEditDesc.classList.add('disabled');
     if (!useFSAPI) {
-      $btnEditDesc.title = 'Editing requires File System Access API (use Chrome/Edge with Open Folder button)';
+      $btnEditDesc.title = 'Editing unavailable in read-only mode';
+      $editDisabledMsg.textContent = '';
     } else {
-      $btnEditDesc.title = 'Description editing not supported for this format';
+      const reason = 'Description editing not supported for this format';
+      $btnEditDesc.title = reason;
+      $editDisabledMsg.textContent = reason;
     }
   }
 }
