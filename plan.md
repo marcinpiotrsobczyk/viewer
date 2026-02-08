@@ -303,3 +303,30 @@ Centered message in viewport: "No images loaded. Use Ctrl+O or the Open Folder b
 - Cache object URLs in a Map keyed by file handle or File object
 - Revoke old URL before creating new one
 - Clean up all URLs when opening a new folder
+
+### 21. Favicon
+
+Source file: `favicon.svg` — a 64x64 SVG icon depicting a dark rounded frame with a landscape scene (sky gradient, sun, mountains) and a toolbar, matching the app's dark theme and accent colors.
+
+ImageViewer.html references the favicon via:
+```html
+<link rel="icon" href="favicon.ico">
+```
+
+**Generating `favicon.ico` from SVG** (requires ImageMagick):
+
+```bash
+convert -background none favicon.svg -define icon:auto-resize=48,32,16 favicon.ico
+```
+
+This produces an ICO file containing 48px, 32px, and 16px sizes. Re-run this command after any changes to `favicon.svg`.
+
+### 22. Symbolic Link
+
+Create `index.html` as a symbolic link to `ImageViewer.html`:
+
+```bash
+ln -s ImageViewer.html index.html
+```
+
+This allows the app to be served by HTTP servers that default to `index.html`.
