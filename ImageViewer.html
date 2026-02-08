@@ -160,7 +160,7 @@ html, body { height: 100%; overflow: hidden; background: #1e1e1e; color: #d0d0d0
 <div id="app">
   <div id="topBar">
     <button class="topBtn" id="btnOpen">Open Folder</button>
-    <button id="btnMode">View</button>
+    <button id="btnMode">Mode: View</button>
     <div class="topSep"></div>
     <span id="topDirName"></span>
     <div class="topSep" id="topSep2" style="display:none"></div>
@@ -364,7 +364,7 @@ function revokeAllURLs() {
 // --- Mode Toggle ---
 function toggleMode() {
   selectMode = !selectMode;
-  $btnMode.textContent = selectMode ? 'Select' : 'View';
+  $btnMode.textContent = selectMode ? 'Mode: Select' : 'Mode: View';
   $btnMode.classList.toggle('select-active', selectMode);
   $viewport.classList.toggle('view-mode', !selectMode);
   $viewport.classList.toggle('select-mode', selectMode);
