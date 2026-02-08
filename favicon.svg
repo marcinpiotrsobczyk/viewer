@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Dark rounded frame -->
+  <rect x="4" y="4" width="56" height="56" rx="8" ry="8" fill="#2d2d2d" stroke="#2a82da" stroke-width="3"/>
+  <!-- Sky gradient -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a3a5c"/>
+      <stop offset="100%" stop-color="#2a82da"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="44" height="34" rx="2" fill="url(#sky)"/>
+  <!-- Sun -->
+  <circle cx="42" cy="20" r="6" fill="#e8a838"/>
+  <!-- Mountains -->
+  <polygon points="10,44 22,26 34,44" fill="#3a6a3a"/>
+  <polygon points="26,44 38,30 54,44" fill="#2d5a2d"/>
+  <!-- Bottom bar (representing the toolbar) -->
+  <rect x="10" y="46" width="44" height="8" rx="2" fill="#1e1e1e"/>
+  <rect x="13" y="48" width="8" height="4" rx="1" fill="#2a82da"/>
+  <rect x="24" y="48" width="6" height="4" rx="1" fill="#555"/>
+  <rect x="33" y="48" width="6" height="4" rx="1" fill="#555"/>
+  <rect x="42" y="48" width="8" height="4" rx="1" fill="#2a8a2a"/>
+</svg>
